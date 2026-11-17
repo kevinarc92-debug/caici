@@ -7,6 +7,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <!-- 自动拼音转换库 -->
+  <script src="https://unpkg.com/pinyin-pro@3.26.0/dist/index.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=Noto+Sans+SC:wght@500;700;900&display=swap');
     body {
@@ -86,7 +88,7 @@
 
   <!-- ==================== 2. TEACHER HOST CONSOLE (/host) ==================== -->
   <div id="view-host" class="hidden min-h-screen flex flex-col bg-slate-950">
-    <!-- Top Bar: Connection, Deck & Round Timer Settings -->
+    <!-- Top Bar -->
     <header class="bg-slate-900 border-b border-slate-800 px-6 py-3 flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-3">
         <span class="font-black text-lg text-white">🎨 Host Console</span>
@@ -102,8 +104,8 @@
         </select>
 
         <!-- Custom Deck Button -->
-        <button onclick="openDeckModal()" class="text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 rounded-xl text-indigo-300 transition">
-          + Edit / Import Words
+        <button onclick="openDeckModal()" class="text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 px-3.5 py-2 rounded-xl text-indigo-300 transition">
+          ✨ + Add / Auto-Generate Deck
         </button>
 
         <!-- Adjustable Round Duration -->
@@ -221,7 +223,7 @@
       </div>
     </header>
 
-    <!-- Center Stage: Character Boxes / Reveal Card / Pause Overlay -->
+    <!-- Center Stage -->
     <main id="screen-stage" class="flex-1 flex flex-col items-center justify-center my-6 relative z-10">
       
       <!-- Active Guessing State: Character Count Boxes -->
@@ -257,7 +259,7 @@
       </div>
     </main>
 
-    <!-- Full-Screen Word Review Wall (Hidden by default) -->
+    <!-- Full-Screen Word Review Wall -->
     <div id="screen-summary-view" class="hidden flex-1 my-4 bg-slate-900/95 border border-slate-800 rounded-3xl p-8 overflow-y-auto z-20">
       <div class="flex items-center justify-between mb-6">
         <div>
@@ -270,37 +272,63 @@
         </div>
       </div>
       <div id="screen-summary-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <!-- Dynamically rendered review cards -->
       </div>
     </div>
 
     <!-- Bottom Live Team Scoreboard -->
     <footer id="screen-scoreboard" class="grid grid-cols-2 md:grid-cols-4 gap-4 z-10">
-      <!-- Dynamically rendered team score cards -->
     </footer>
   </div>
 
-  <!-- ==================== 4. CUSTOM DECK MODAL ==================== -->
-  <div id="deck-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-    <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-2xl w-full p-6 shadow-2xl">
+  <!-- ==================== 4. SMART AUTO-GENERATE DECK MODAL ==================== -->
+  <div id="deck-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-3xl w-full p-6 shadow-2xl max-h-[90vh] flex flex-col">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-xl font-black text-white">📚 Custom Word Deck</h3>
+        <div>
+          <h3 class="text-xl font-black text-white">✨ Smart Vocabulary Generator</h3>
+          <p class="text-xs text-slate-400 mt-0.5">Just paste Chinese characters — Pinyin & English meanings are generated automatically!</p>
+        </div>
         <button onclick="closeDeckModal()" class="text-slate-400 hover:text-white text-2xl">&times;</button>
       </div>
 
-      <p class="text-xs text-slate-400 mb-3">
-        Enter one word per line using the format: <code class="text-amber-300">Hanzi | Pinyin | English Meaning</code> (Saved automatically in your browser):
-      </p>
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-4 overflow-y-auto flex-1 pr-1">
+        <!-- Step 1: Raw Hanzi Input -->
+        <div class="md:col-span-5 flex flex-col">
+          <label class="text-xs font-bold text-slate-400 uppercase mb-1.5">1. Deck Title</label>
+          <input id="custom-deck-name" type="text" value="Lesson Vocabulary" class="w-full mb-3 bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" placeholder="Deck Title" />
 
-      <input id="custom-deck-name" type="text" value="Custom Lesson Deck" class="w-full mb-3 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white" placeholder="Deck Title" />
+          <label class="text-xs font-bold text-slate-400 uppercase mb-1.5">2. Paste Chinese Words (One per line)</label>
+          <textarea id="raw-hanzi-input" rows="8" class="w-full flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3.5 text-base zh-text text-slate-100 focus:outline-none focus:border-indigo-500" placeholder="吃火锅
+买东西
+坐地铁
+看电影
+喝珍珠奶茶"></textarea>
 
-      <textarea id="custom-deck-textarea" rows="9" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-sm font-mono text-slate-200 focus:outline-none focus:border-indigo-500" placeholder="吃火锅 | chī huǒ guō | eat hotpot
-迟到 | chí dào | be late
-熊猫 | xióng māo | panda"></textarea>
+          <button id="btn-auto-gen" onclick="autoGenerateWords()" class="mt-3 w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm transition shadow-lg shadow-amber-500/20">
+            ✨ Auto-Generate Pinyin & Meaning
+          </button>
+        </div>
 
-      <div class="mt-4 flex justify-end gap-3">
+        <!-- Step 2: Auto-Filled Preview Table -->
+        <div class="md:col-span-7 flex flex-col bg-slate-950/70 border border-slate-800 rounded-2xl p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-indigo-300 uppercase">3. Auto-Generated Preview (Editable)</span>
+            <span id="gen-status-text" class="text-xs text-slate-400">0 words ready</span>
+          </div>
+
+          <div id="generated-preview-list" class="flex-1 overflow-y-auto space-y-2 max-h-72 pr-1">
+            <div class="text-center text-slate-500 text-xs py-16">
+              Paste Chinese words on the left and click<br/><strong class="text-amber-400">"Auto-Generate Pinyin & Meaning"</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-5 pt-4 border-t border-slate-800 flex justify-end gap-3">
         <button onclick="closeDeckModal()" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-sm font-semibold">Cancel</button>
-        <button onclick="saveCustomDeck()" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold">Save & Use Deck</button>
+        <button onclick="saveGeneratedDeck()" class="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold shadow-lg shadow-indigo-600/25">
+          ✅ Save & Use This Deck
+        </button>
       </div>
     </div>
   </div>
@@ -412,6 +440,7 @@
     let wordQueue = [];
     let currentWord = null;
     let timerInterval = null;
+    let generatedDraftWords = [];
 
     let gameState = {
       deckTitle: 'HSK 1-2 Essentials',
@@ -704,30 +733,113 @@
       resetRoundTimer();
     }
 
-    // Custom Deck Modal
+    // ==================== 6. AUTO PINYIN & ENGLISH MEANING ENGINE ====================
     function openDeckModal() {
       document.getElementById('deck-modal').classList.remove('hidden');
     }
     function closeDeckModal() {
       document.getElementById('deck-modal').classList.add('hidden');
     }
-    function saveCustomDeck() {
-      const name = document.getElementById('custom-deck-name').value.trim() || 'Custom Deck';
-      const raw = document.getElementById('custom-deck-textarea').value.trim();
-      if (!raw) return alert('Please enter at least one word.');
 
-      const parsed = raw.split('\n').map(line => {
-        const parts = line.split('|').map(s => s.trim());
-        return {
-          hanzi: parts[0] || '',
-          pinyin: parts[1] || '',
-          meaning: parts[2] || ''
-        };
-      }).filter(item => item.hanzi.length > 0);
+    async function translateZhToEn(hanzi) {
+      try {
+        const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(hanzi)}&langpair=zh-CN|en`);
+        const data = await res.json();
+        if (data && data.responseData && data.responseData.translatedText) {
+          return data.responseData.translatedText.toLowerCase();
+        }
+      } catch (e) {
+        console.warn('Translation fallback for:', hanzi);
+      }
+      return '';
+    }
 
+    async function autoGenerateWords() {
+      const raw = document.getElementById('raw-hanzi-input').value.trim();
+      if (!raw) return alert('Please enter or paste at least one Chinese word.');
+
+      const btn = document.getElementById('btn-auto-gen');
+      const statusText = document.getElementById('gen-status-text');
+      btn.disabled = true;
+      btn.textContent = '⏳ Generating Pinyin & Meanings...';
+
+      // 支持换行、中文逗号、英文逗号、顿号分隔
+      const lines = raw
+        .split(/[\n,，、;；]+/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+
+      generatedDraftWords = [];
+      statusText.textContent = `Processing 0 / ${lines.length}...`;
+
+      for (let i = 0; i < lines.length; i++) {
+        const hanzi = lines[i];
+        // 1. 本地毫秒级生成准确拼音
+        const pinyinText = window.pinyinPro
+          ? window.pinyinPro.pinyin(hanzi, { toneType: 'symbol' })
+          : '';
+
+        // 2. 自动获取英文释义
+        const meaningText = await translateZhToEn(hanzi);
+
+        generatedDraftWords.push({
+          hanzi,
+          pinyin: pinyinText,
+          meaning: meaningText
+        });
+
+        statusText.textContent = `Generated ${i + 1} / ${lines.length}`;
+        renderGeneratedPreview();
+      }
+
+      btn.disabled = false;
+      btn.textContent = '✨ Auto-Generate Pinyin & Meaning';
+      statusText.textContent = `${generatedDraftWords.length} words ready!`;
+    }
+
+    function renderGeneratedPreview() {
+      const container = document.getElementById('generated-preview-list');
+      container.innerHTML = '';
+
+      generatedDraftWords.forEach((item, idx) => {
+        const row = document.createElement('div');
+        row.className = 'bg-slate-900 border border-slate-800 rounded-xl p-2.5 flex items-center gap-2';
+        row.innerHTML = `
+          <span class="zh-text font-black text-lg text-white min-w-[4.5rem]">${item.hanzi}</span>
+          <input
+            type="text"
+            value="${item.pinyin}"
+            onchange="generatedDraftWords[${idx}].pinyin = this.value"
+            class="w-32 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-indigo-300 font-semibold focus:outline-none focus:border-indigo-500"
+            placeholder="Pinyin"
+          />
+          <input
+            type="text"
+            value="${item.meaning}"
+            onchange="generatedDraftWords[${idx}].meaning = this.value"
+            class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+            placeholder="English meaning"
+          />
+          <button onclick="removeDraftWord(${idx})" class="text-slate-500 hover:text-rose-400 px-1 text-sm">&times;</button>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function removeDraftWord(idx) {
+      generatedDraftWords.splice(idx, 1);
+      renderGeneratedPreview();
+      document.getElementById('gen-status-text').textContent = `${generatedDraftWords.length} words ready!`;
+    }
+
+    function saveGeneratedDeck() {
+      if (generatedDraftWords.length === 0) {
+        return alert('Please click "Auto-Generate Pinyin & Meaning" first!');
+      }
+      const name = document.getElementById('custom-deck-name').value.trim() || 'Custom Lesson Deck';
       const customKey = 'custom_' + Date.now();
       const saved = JSON.parse(localStorage.getItem('ebci_pictionary_decks_en') || '{}');
-      saved[customKey] = { name, words: parsed };
+      saved[customKey] = { name, words: generatedDraftWords };
       localStorage.setItem('ebci_pictionary_decks_en', JSON.stringify(saved));
 
       loadDecks();
@@ -736,7 +848,7 @@
       closeDeckModal();
     }
 
-    // ==================== 6. PROJECTOR SCREEN RENDERING ====================
+    // ==================== 7. PROJECTOR SCREEN RENDERING ====================
     let revealTimeout = null;
 
     function handleScreenMessage(payload) {
