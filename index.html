@@ -1,17 +1,20 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>你画我猜 · 中文课堂双端互动系统</title>
+  <title>Chinese Pictionary · Classroom Dual-Screen System</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=Noto+Sans+SC:wght@500;700;900&display=swap');
     body {
-      font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
       user-select: none;
+    }
+    .zh-text {
+      font-family: 'Noto Sans SC', sans-serif;
     }
     @keyframes popIn {
       0% { transform: scale(0.8); opacity: 0; }
@@ -32,20 +35,20 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen overflow-x-hidden">
 
-  <!-- ==================== 1. 入口登录页 ==================== -->
+  <!-- ==================== 1. LOGIN / ROLE SELECTION ==================== -->
   <div id="view-login" class="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950">
     <div class="max-w-md w-full bg-slate-900/90 border border-slate-800 rounded-3xl p-8 shadow-2xl backdrop-blur">
       <div class="text-center mb-8">
         <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 text-3xl mb-4">
           🎨
         </div>
-        <h1 class="text-3xl font-black tracking-tight text-white">你画我猜 · 中文课堂</h1>
-        <p class="text-slate-400 text-sm mt-2">白板作画 + 双端实时同步出题与计分</p>
+        <h1 class="text-3xl font-black tracking-tight text-white">Chinese Pictionary</h1>
+        <p class="text-slate-400 text-sm mt-2">Whiteboard Drawing + Dual-Screen Live Sync</p>
       </div>
 
       <div class="mb-6">
         <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-          课堂房间号（两端填一致即可自动配对）
+          Classroom Room Code (Must match on both computers)
         </label>
         <input
           id="room-input"
@@ -53,169 +56,181 @@
           value="8888"
           maxlength="12"
           class="w-full text-center text-2xl font-bold tracking-widest bg-slate-950 border border-slate-700 rounded-xl py-3 px-4 text-amber-400 focus:outline-none focus:border-indigo-500"
-          placeholder="输入房间号"
+          placeholder="Enter Room Code"
         />
       </div>
 
       <div class="space-y-3">
         <button
           onclick="startRole('host')"
-          class="w-full py-4 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] transition font-bold text-lg text-white shadow-lg shadow-indigo-600/25 flex items-center justify-between"
+          class="w-full py-4 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] transition font-bold text-base text-white shadow-lg shadow-indigo-600/25 flex items-center justify-between"
         >
-          <span>💻 我是老师 / 出题端</span>
-          <span class="text-xs font-normal bg-indigo-800/80 px-2.5 py-1 rounded-lg">笔记本使用</span>
+          <span>💻 Teacher / Host Console</span>
+          <span class="text-xs font-normal bg-indigo-800/80 px-2.5 py-1 rounded-lg">Your Laptop</span>
         </button>
 
         <button
           onclick="startRole('screen')"
-          class="w-full py-4 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] transition font-bold text-lg text-white shadow-lg shadow-emerald-600/25 flex items-center justify-between"
+          class="w-full py-4 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] transition font-bold text-base text-white shadow-lg shadow-emerald-600/25 flex items-center justify-between"
         >
-          <span>🖥️ 教室大屏 / 投屏端</span>
-          <span class="text-xs font-normal bg-emerald-800/80 px-2.5 py-1 rounded-lg">学生观看</span>
+          <span>🖥️ Classroom Projector Screen</span>
+          <span class="text-xs font-normal bg-emerald-800/80 px-2.5 py-1 rounded-lg">Student View</span>
         </button>
       </div>
 
       <p class="text-center text-xs text-slate-500 mt-6">
-        建议先打开“教室大屏”，再用笔记本登录“出题端”
+        Tip: Open "Projector Screen" on the classroom PC first, then connect with your laptop.
       </p>
     </div>
   </div>
 
-  <!-- ==================== 2. 老师笔记本出题端 (/host) ==================== -->
+  <!-- ==================== 2. TEACHER HOST CONSOLE (/host) ==================== -->
   <div id="view-host" class="hidden min-h-screen flex flex-col bg-slate-950">
-    <!-- 顶部状态与词库/时间设置栏 -->
+    <!-- Top Bar: Connection, Deck & Round Timer Settings -->
     <header class="bg-slate-900 border-b border-slate-800 px-6 py-3 flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-3">
-        <span class="font-black text-lg text-white">🎨 老师控制台</span>
+        <span class="font-black text-lg text-white">🎨 Host Console</span>
         <span id="host-conn-badge" class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
           <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-          等待连接大屏 (房间 <span id="host-room-label">8888</span>)...
+          Connecting to Screen (Room <span id="host-room-label">8888</span>)...
         </span>
       </div>
 
       <div class="flex flex-wrap items-center gap-3">
-        <!-- 词库选择 -->
+        <!-- Word Deck Selector -->
         <select id="deck-select" onchange="changeDeck()" class="bg-slate-800 border border-slate-700 text-sm rounded-xl px-3 py-2 text-slate-200 focus:outline-none">
         </select>
 
-        <!-- 自定义词库按钮 -->
+        <!-- Custom Deck Button -->
         <button onclick="openDeckModal()" class="text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 rounded-xl text-indigo-300 transition">
-          + 编辑/导入词库
+          + Edit / Import Words
         </button>
 
-        <!-- 时长调节 -->
-        <div class="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5">
-          <span class="text-xs text-slate-400">单轮秒数:</span>
-          <input id="duration-input" type="number" value="90" min="15" max="600" step="15" class="w-14 bg-transparent text-center font-bold text-amber-400 focus:outline-none text-sm" />
+        <!-- Adjustable Round Duration -->
+        <div class="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5">
+          <span class="text-xs text-slate-400">Round Time (sec):</span>
+          <input
+            id="duration-input"
+            type="number"
+            value="90"
+            min="10"
+            max="600"
+            step="5"
+            onchange="resetRoundTimer()"
+            class="w-16 bg-slate-950 border border-slate-700 rounded-lg text-center font-bold text-amber-400 focus:outline-none text-sm py-0.5"
+          />
+          <button onclick="resetRoundTimer()" class="text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1 rounded-lg transition">
+            Apply
+          </button>
         </div>
       </div>
     </header>
 
-    <!-- 主控制区 -->
+    <!-- Main Workspace -->
     <main class="flex-1 max-w-6xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
       
-      <!-- 左侧：当前题目卡片（仅老师与画手可见） -->
+      <!-- Left: Current Secret Word Card -->
       <div class="lg:col-span-7 flex flex-col justify-between bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
         <div class="flex items-center justify-between">
           <span class="text-xs font-bold uppercase tracking-wider text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-3 py-1 rounded-full">
-            当前词卡（大屏已隐藏）
+            Secret Word (Hidden on Projector)
           </span>
-          <div class="flex items-center gap-3">
-            <span class="text-sm text-slate-400">剩余词数: <strong id="remaining-count" class="text-white">0</strong></span>
+          <div class="flex items-center gap-4">
+            <span class="text-sm text-slate-400">Words Left: <strong id="remaining-count" class="text-white">0</strong></span>
             <span id="host-timer-display" class="text-2xl font-black font-mono text-amber-400">01:30</span>
           </div>
         </div>
 
-        <!-- 词语展示 -->
+        <!-- Word Display -->
         <div class="my-8 text-center py-8 px-4 rounded-2xl bg-slate-950/80 border border-slate-800/80 relative">
           <div id="host-word-pinyin" class="text-2xl font-semibold text-indigo-300 mb-2">dǎ lán qiú</div>
-          <div id="host-word-hanzi" class="text-6xl md:text-7xl font-black text-white tracking-wider mb-3">打篮球</div>
-          <div id="host-word-meaning" class="text-base text-slate-400">to play basketball · 3 个字</div>
+          <div id="host-word-hanzi" class="zh-text text-6xl md:text-7xl font-black text-white tracking-wider mb-3">打篮球</div>
+          <div id="host-word-meaning" class="text-base text-slate-400">to play basketball · 3 characters</div>
         </div>
 
-        <!-- 核心动作按钮 -->
+        <!-- Primary Action Buttons -->
         <div class="grid grid-cols-3 gap-3">
-          <button onclick="handleCorrect()" class="col-span-1 py-4 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition font-black text-lg text-white shadow-lg shadow-emerald-600/20">
-            ✅ 猜对了 (+1)
+          <button onclick="handleCorrect()" class="col-span-1 py-4 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition font-black text-base text-white shadow-lg shadow-emerald-600/20">
+            ✅ Correct (+1)
           </button>
-          <button onclick="handleSkip()" class="col-span-1 py-4 px-4 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 transition font-bold text-lg text-slate-200 border border-slate-700">
-            ⏭️ 跳过此词
+          <button onclick="handleSkip()" class="col-span-1 py-4 px-4 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 transition font-bold text-base text-slate-200 border border-slate-700">
+            ⏭️ Skip Word
           </button>
-          <button id="btn-pause" onclick="togglePause()" class="col-span-1 py-4 px-4 rounded-2xl bg-amber-600 hover:bg-amber-500 active:scale-95 transition font-bold text-lg text-white">
-            ▶️ 开始计时
+          <button id="btn-pause" onclick="togglePause()" class="col-span-1 py-4 px-4 rounded-2xl bg-amber-600 hover:bg-amber-500 active:scale-95 transition font-bold text-base text-white">
+            ▶️ Start Timer
           </button>
         </div>
 
-        <!-- 辅助控制栏 -->
+        <!-- Secondary Controls -->
         <div class="mt-4 pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
-          <button onclick="resetRoundTimer()" class="text-xs font-semibold px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300">
-            🔄 重置本轮倒计时
+          <button onclick="resetRoundTimer()" class="text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300">
+            🔄 Reset Round Timer
           </button>
           <button onclick="toggleSummaryScreen()" id="btn-summary" class="text-xs font-bold px-4 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300">
-            📊 投屏本局战绩复盘
+            📊 Show Word Review Wall
           </button>
         </div>
       </div>
 
-      <!-- 右侧：手动记分板 & 队伍设置 -->
+      <!-- Right: Manual Scoreboard & Team Controls -->
       <div class="lg:col-span-5 flex flex-col justify-between bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
         <div>
           <div class="flex items-center justify-between mb-4">
-            <h2 class="font-bold text-lg text-white">🏆 小组积分控制台</h2>
+            <h2 class="font-bold text-lg text-white">🏆 Team Scoreboard</h2>
             <div class="flex gap-1.5">
-              <button onclick="setTeamCount(2)" class="text-xs px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">2组</button>
-              <button onclick="setTeamCount(3)" class="text-xs px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">3组</button>
-              <button onclick="setTeamCount(4)" class="text-xs px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">4组</button>
+              <button onclick="setTeamCount(2)" class="text-xs px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">2 Teams</button>
+              <button onclick="setTeamCount(3)" class="text-xs px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">3 Teams</button>
+              <button onclick="setTeamCount(4)" class="text-xs px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">4 Teams</button>
             </div>
           </div>
 
-          <p class="text-xs text-slate-400 mb-4">点击小组卡片设为“当前答题组”（猜对自动加分），也可随时手动微调分数：</p>
+          <p class="text-xs text-slate-400 mb-4">Click a team card to set it as the active drawing team, or adjust scores manually:</p>
 
           <div id="host-teams-list" class="space-y-3">
-            <!-- 动态生成队伍控制条 -->
+            <!-- Dynamically rendered team controls -->
           </div>
         </div>
 
         <div class="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-          <span>已记录战绩: <strong id="history-count" class="text-white">0</strong> 词</span>
+          <span>Words Played: <strong id="history-count" class="text-white">0</strong></span>
           <button onclick="resetAllGame()" class="text-rose-400 hover:text-rose-300 underline">
-            清空所有分数与战绩
+            Reset All Scores & History
           </button>
         </div>
       </div>
     </main>
   </div>
 
-  <!-- ==================== 3. 教室大屏投屏端 (/screen) ==================== -->
+  <!-- ==================== 3. CLASSROOM PROJECTOR SCREEN (/screen) ==================== -->
   <div id="view-screen" class="hidden min-h-screen flex flex-col justify-between p-8 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 relative overflow-hidden">
     
-    <!-- 顶部状态与巨型倒计时 -->
+    <!-- Top Header & Giant Timer -->
     <header class="flex items-center justify-between z-10">
       <div class="flex items-center gap-3">
         <span class="text-3xl">🎨</span>
         <div>
-          <h1 class="text-2xl font-black text-white tracking-wide">你画我猜 · 中文课堂</h1>
-          <p id="screen-deck-title" class="text-sm text-slate-400">当前词库：HSK 1-2 基础词库 · 房间号 8888</p>
+          <h1 class="text-2xl font-black text-white tracking-wide">Chinese Pictionary</h1>
+          <p id="screen-deck-title" class="text-sm text-slate-400">Deck: HSK 1-2 Essentials · Room 8888</p>
         </div>
       </div>
 
-      <!-- 巨型倒计时胶囊 -->
+      <!-- Giant Countdown Capsule -->
       <div id="screen-timer-box" class="flex items-center gap-4 bg-slate-900/90 border-2 border-slate-700 px-8 py-3 rounded-3xl shadow-2xl">
-        <span class="text-sm font-bold uppercase tracking-widest text-slate-400">剩余时间</span>
+        <span class="text-sm font-bold uppercase tracking-widest text-slate-400">Time Left</span>
         <span id="screen-timer" class="text-6xl font-black font-mono text-amber-400">01:30</span>
       </div>
     </header>
 
-    <!-- 中央核心舞台：字数格子 / 揭晓动画 / 暂停遮罩 -->
+    <!-- Center Stage: Character Boxes / Reveal Card / Pause Overlay -->
     <main id="screen-stage" class="flex-1 flex flex-col items-center justify-center my-6 relative z-10">
       
-      <!-- 常规作画猜词态：字数格子 -->
+      <!-- Active Guessing State: Character Count Boxes -->
       <div id="screen-boxes-container" class="text-center">
         <div class="inline-block px-5 py-1.5 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-bold text-lg mb-8">
-          请看白板作画并大声猜出中文词语！
+          Watch the whiteboard and shout out the Chinese word!
         </div>
 
-        <!-- 动态字数方块 -->
+        <!-- Dynamic Character Boxes -->
         <div id="screen-char-boxes" class="flex flex-wrap items-center justify-center gap-6">
           <div class="w-36 h-36 md:w-44 md:h-44 rounded-3xl bg-slate-800/90 border-4 border-indigo-500/50 shadow-2xl flex items-center justify-center text-6xl font-black text-slate-600">?</div>
           <div class="w-36 h-36 md:w-44 md:h-44 rounded-3xl bg-slate-800/90 border-4 border-indigo-500/50 shadow-2xl flex items-center justify-center text-6xl font-black text-slate-600">?</div>
@@ -223,78 +238,78 @@
         </div>
 
         <div id="screen-char-count-label" class="mt-8 text-2xl font-bold text-slate-400">
-          共 <span class="text-amber-400 text-3xl font-black">3</span> 个字
+          <span class="text-amber-400 text-4xl font-black">3</span> Characters
         </div>
       </div>
 
-      <!-- 猜对瞬间揭晓卡片 -->
+      <!-- Word Reveal Card on Correct Guess -->
       <div id="screen-reveal-card" class="hidden text-center animate-pop bg-emerald-950/90 border-4 border-emerald-400 rounded-3xl px-16 py-12 shadow-2xl">
-        <div class="text-emerald-300 font-bold text-xl mb-2">🎉 回答正确！</div>
+        <div class="text-emerald-300 font-bold text-xl mb-2">🎉 Correct!</div>
         <div id="reveal-pinyin" class="text-3xl font-bold text-emerald-200 mb-2">dǎ lán qiú</div>
-        <div id="reveal-hanzi" class="text-8xl font-black text-white tracking-wider">打篮球</div>
+        <div id="reveal-hanzi" class="zh-text text-8xl font-black text-white tracking-wider">打篮球</div>
       </div>
 
-      <!-- 暂停遮罩 -->
+      <!-- Pause Overlay -->
       <div id="screen-pause-overlay" class="hidden absolute inset-0 bg-slate-950/85 backdrop-blur-md rounded-3xl flex flex-col items-center justify-center z-20 border border-slate-800">
         <div class="text-7xl mb-4">⏸️</div>
-        <div class="text-5xl font-black text-white tracking-wider">暂停中</div>
-        <p class="text-slate-400 text-xl mt-3">听老师讲解发音与用法</p>
+        <div class="text-5xl font-black text-white tracking-wider">PAUSED</div>
+        <p class="text-slate-400 text-xl mt-3">Listen to your teacher's explanation</p>
       </div>
     </main>
 
-    <!-- 战绩复盘全屏模式（默认隐藏） -->
+    <!-- Full-Screen Word Review Wall (Hidden by default) -->
     <div id="screen-summary-view" class="hidden flex-1 my-4 bg-slate-900/95 border border-slate-800 rounded-3xl p-8 overflow-y-auto z-20">
       <div class="flex items-center justify-between mb-6">
         <div>
-          <h2 class="text-3xl font-black text-white">📊 本局词汇战绩复盘</h2>
-          <p class="text-slate-400 mt-1">跟着老师一起大声朗读并尝试用这些词造句吧！</p>
+          <h2 class="text-3xl font-black text-white">📊 Session Vocabulary Review</h2>
+          <p class="text-slate-400 mt-1">Read aloud together and try making sentences with these words!</p>
         </div>
         <div class="flex gap-4 text-sm font-bold">
-          <span class="px-4 py-2 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">✅ 猜对词汇</span>
-          <span class="px-4 py-2 rounded-xl bg-slate-800 text-slate-400 border border-slate-700">⏭️ 跳过词汇</span>
+          <span class="px-4 py-2 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">✅ Guessed</span>
+          <span class="px-4 py-2 rounded-xl bg-slate-800 text-slate-400 border border-slate-700">⏭️ Skipped</span>
         </div>
       </div>
       <div id="screen-summary-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <!-- 动态生成复盘卡片 -->
+        <!-- Dynamically rendered review cards -->
       </div>
     </div>
 
-    <!-- 底部小组实时积分栏 -->
+    <!-- Bottom Live Team Scoreboard -->
     <footer id="screen-scoreboard" class="grid grid-cols-2 md:grid-cols-4 gap-4 z-10">
-      <!-- 动态生成队伍大屏积分卡 -->
+      <!-- Dynamically rendered team score cards -->
     </footer>
   </div>
 
-  <!-- ==================== 4. 词库编辑与导入弹窗 ==================== -->
+  <!-- ==================== 4. CUSTOM DECK MODAL ==================== -->
   <div id="deck-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
     <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-2xl w-full p-6 shadow-2xl">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-xl font-black text-white">📚 自定义课堂词库</h3>
+        <h3 class="text-xl font-black text-white">📚 Custom Word Deck</h3>
         <button onclick="closeDeckModal()" class="text-slate-400 hover:text-white text-2xl">&times;</button>
       </div>
 
       <p class="text-xs text-slate-400 mb-3">
-        每行一个词，格式为：<code class="text-amber-300">汉字 | 拼音 | 英文或提示</code>（支持直接从 Excel 或笔记粘贴，自动保存在本地浏览器）：
+        Enter one word per line using the format: <code class="text-amber-300">Hanzi | Pinyin | English Meaning</code> (Saved automatically in your browser):
       </p>
 
-      <input id="custom-deck-name" type="text" value="自定义课堂专场" class="w-full mb-3 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white" placeholder="词库名称" />
+      <input id="custom-deck-name" type="text" value="Custom Lesson Deck" class="w-full mb-3 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white" placeholder="Deck Title" />
 
       <textarea id="custom-deck-textarea" rows="9" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-sm font-mono text-slate-200 focus:outline-none focus:border-indigo-500" placeholder="吃火锅 | chī huǒ guō | eat hotpot
 迟到 | chí dào | be late
 熊猫 | xióng māo | panda"></textarea>
 
       <div class="mt-4 flex justify-end gap-3">
-        <button onclick="closeDeckModal()" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-sm font-semibold">取消</button>
-        <button onclick="saveCustomDeck()" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold">保存并使用该词库</button>
+        <button onclick="closeDeckModal()" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-sm font-semibold">Cancel</button>
+        <button onclick="saveCustomDeck()" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold">Save & Use Deck</button>
       </div>
     </div>
   </div>
 
   <script>
-    // ==================== 1. 预设分级词库 ====================
+    // ==================== 1. PRESET WORD DECKS ====================
     const DEFAULT_DECKS = {
       hsk12: {
-        name: "HSK 1-2 基础高频词",
+        name: "HSK 1-2 Essentials",
         words: [
           { hanzi: "熊猫", pinyin: "xióng māo", meaning: "panda" },
           { hanzi: "面条", pinyin: "miàn tiáo", meaning: "noodles" },
@@ -314,7 +329,7 @@
         ]
       },
       hsk34: {
-        name: "HSK 3-4 生活与场景",
+        name: "HSK 3-4 Daily Life",
         words: [
           { hanzi: "堵车", pinyin: "dǔ chē", meaning: "traffic jam" },
           { hanzi: "迟到", pinyin: "chí dào", meaning: "to be late" },
@@ -331,7 +346,7 @@
         ]
       },
       idioms: {
-        name: "高级趣味成语专场",
+        name: "Advanced Chinese Idioms",
         words: [
           { hanzi: "画蛇添足", pinyin: "huà shé tiān zú", meaning: "ruin something by adding superfluous details" },
           { hanzi: "对牛弹琴", pinyin: "duì niú tán qín", meaning: "preach to deaf ears" },
@@ -345,7 +360,7 @@
       }
     };
 
-    // ==================== 2. Web Audio API 原生合成音效引擎 ====================
+    // ==================== 2. WEB AUDIO SYNTHESIZER ====================
     const AudioEngine = {
       ctx: null,
       init() {
@@ -368,10 +383,10 @@
         osc.stop(this.ctx.currentTime + delay + duration);
       },
       playCorrect() {
-        this.playTone(523.25, 'triangle', 0.15, 0, 0.3);     // C5
-        this.playTone(659.25, 'triangle', 0.15, 0.1, 0.3);   // E5
-        this.playTone(783.99, 'triangle', 0.35, 0.2, 0.35);  // G5
-        this.playTone(1046.5, 'sine', 0.45, 0.3, 0.3);       // C6
+        this.playTone(523.25, 'triangle', 0.15, 0, 0.3);
+        this.playTone(659.25, 'triangle', 0.15, 0.1, 0.3);
+        this.playTone(783.99, 'triangle', 0.35, 0.2, 0.35);
+        this.playTone(1046.5, 'sine', 0.45, 0.3, 0.3);
       },
       playSkip() {
         this.playTone(350, 'sawtooth', 0.15, 0, 0.15);
@@ -386,8 +401,8 @@
       }
     };
 
-    // ==================== 3. 全局状态与双端通信 ====================
-    let role = null; // 'host' | 'screen'
+    // ==================== 3. GLOBAL STATE & PEERJS SYNC ====================
+    let role = null;
     let peer = null;
     let conn = null;
     let roomCode = '8888';
@@ -399,22 +414,21 @@
     let timerInterval = null;
 
     let gameState = {
-      deckTitle: 'HSK 1-2 基础高频词',
+      deckTitle: 'HSK 1-2 Essentials',
       charCount: 3,
       timeLeft: 90,
       isPaused: true,
       showSummary: false,
       activeTeamIndex: 0,
       teams: [
-        { name: '红队', score: 0, color: 'rose' },
-        { name: '蓝队', score: 0, color: 'sky' }
+        { name: 'Red Team', score: 0, color: 'rose' },
+        { name: 'Blue Team', score: 0, color: 'sky' }
       ],
-      history: [] // { hanzi, pinyin, meaning, status: 'correct' | 'skipped' }
+      history: []
     };
 
-    // 初始化加载本地词库
     function loadDecks() {
-      const saved = localStorage.getItem('ebci_pictionary_decks');
+      const saved = localStorage.getItem('ebci_pictionary_decks_en');
       allDecks = saved ? { ...DEFAULT_DECKS, ...JSON.parse(saved) } : { ...DEFAULT_DECKS };
       const select = document.getElementById('deck-select');
       select.innerHTML = '';
@@ -426,7 +440,7 @@
       });
     }
 
-    // ==================== 4. 路由与 PeerJS 配对逻辑 ====================
+    // ==================== 4. ROLE ROUTING & WEBRTC PAIRING ====================
     function startRole(selectedRole) {
       AudioEngine.init();
       role = selectedRole;
@@ -439,18 +453,17 @@
         initHost();
       } else {
         document.getElementById('view-screen').classList.remove('hidden');
-        document.getElementById('screen-deck-title').textContent = `等待老师端连接 · 房间号 ${roomCode}`;
+        document.getElementById('screen-deck-title').textContent = `Waiting for Host Laptop · Room ${roomCode}`;
         initScreen();
       }
     }
 
-    // 初始化教室大屏（作为 Peer 服务端等待老师连接）
     function initScreen() {
       const screenPeerId = `ebci-pictionary-screen-${roomCode}`;
       peer = new Peer(screenPeerId);
 
       peer.on('open', () => {
-        document.getElementById('screen-deck-title').textContent = `已就绪 · 请老师端连接房间 ${roomCode}`;
+        document.getElementById('screen-deck-title').textContent = `Ready · Connect Host Laptop to Room ${roomCode}`;
       });
 
       peer.on('connection', (connection) => {
@@ -459,13 +472,12 @@
       });
 
       peer.on('error', (err) => {
-        alert('房间连接提示：请确认没有重复打开同一房间号的大屏端 (' + err.type + ')');
+        alert('Connection Notice: Please make sure no other Projector Screen is using the same Room Code (' + err.type + ')');
       });
 
       renderScreenUI();
     }
 
-    // 初始化老师笔记本（主动连接大屏端）
     function initHost() {
       loadDecks();
       refillWordQueue();
@@ -485,7 +497,7 @@
       conn.on('open', () => {
         const badge = document.getElementById('host-conn-badge');
         badge.className = 'inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
-        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span> 大屏已实时同步 (房间 ${roomCode})`;
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Projector Synced (Room ${roomCode})`;
         syncToScreen({ type: 'SYNC_STATE', state: gameState });
       });
 
@@ -500,7 +512,7 @@
       }
     }
 
-    // ==================== 5. 老师端核心业务逻辑 ====================
+    // ==================== 5. HOST LOGIC ====================
     function changeDeck() {
       currentDeckKey = document.getElementById('deck-select').value;
       gameState.deckTitle = allDecks[currentDeckKey].name;
@@ -510,7 +522,6 @@
 
     function refillWordQueue() {
       const list = [...allDecks[currentDeckKey].words];
-      // 洗牌打乱顺序
       for (let i = list.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [list[i], list[j]] = [list[j], list[i]];
@@ -525,7 +536,8 @@
 
       document.getElementById('host-word-hanzi').textContent = currentWord.hanzi;
       document.getElementById('host-word-pinyin').textContent = currentWord.pinyin;
-      document.getElementById('host-word-meaning').textContent = `${currentWord.meaning || ''} · 共 ${currentWord.hanzi.length} 个字`;
+      const charWord = currentWord.hanzi.length === 1 ? 'character' : 'characters';
+      document.getElementById('host-word-meaning').textContent = `${currentWord.meaning || ''} · ${currentWord.hanzi.length} ${charWord}`;
       document.getElementById('remaining-count').textContent = wordQueue.length;
 
       if (shouldSync) {
@@ -533,12 +545,10 @@
       }
     }
 
-    // 猜对了 (+1分 + 大屏庆祝特效 + 记录复盘)
     function handleCorrect() {
       if (!currentWord) return;
       AudioEngine.playCorrect();
 
-      // 当前激活队伍自动加 1 分
       gameState.teams[gameState.activeTeamIndex].score += 1;
       gameState.history.push({ ...currentWord, status: 'correct' });
 
@@ -548,7 +558,6 @@
       renderHostTeams();
       document.getElementById('history-count').textContent = gameState.history.length;
 
-      // 通知大屏播放撒花+揭晓当前词+随后切下一题字数格子
       syncToScreen({
         type: 'WORD_CORRECT',
         revealed: revealedWord,
@@ -556,7 +565,6 @@
       });
     }
 
-    // 跳过此词
     function handleSkip() {
       if (!currentWord) return;
       AudioEngine.playSkip();
@@ -567,17 +575,16 @@
       syncToScreen({ type: 'WORD_SKIPPED', state: gameState });
     }
 
-    // 暂停 / 继续计时
     function togglePause() {
       gameState.isPaused = !gameState.isPaused;
       const btn = document.getElementById('btn-pause');
 
       if (!gameState.isPaused) {
-        btn.textContent = '⏸️ 暂停计时';
+        btn.textContent = '⏸️ Pause Timer';
         btn.classList.replace('bg-amber-600', 'bg-rose-600');
         startTimerLoop();
       } else {
-        btn.textContent = '▶️ 继续计时';
+        btn.textContent = '▶️ Resume Timer';
         btn.classList.replace('bg-rose-600', 'bg-amber-600');
         clearInterval(timerInterval);
       }
@@ -586,12 +593,12 @@
 
     function resetRoundTimer() {
       clearInterval(timerInterval);
-      const sec = parseInt(document.getElementById('duration-input').value, 10) || 90;
+      const sec = Math.max(5, parseInt(document.getElementById('duration-input').value, 10) || 90);
       gameState.timeLeft = sec;
       gameState.isPaused = true;
       const btn = document.getElementById('btn-pause');
-      btn.textContent = '▶️ 开始计时';
-      btn.className = 'col-span-1 py-4 px-4 rounded-2xl bg-amber-600 hover:bg-amber-500 active:scale-95 transition font-bold text-lg text-white';
+      btn.textContent = '▶️ Start Timer';
+      btn.className = 'col-span-1 py-4 px-4 rounded-2xl bg-amber-600 hover:bg-amber-500 active:scale-95 transition font-bold text-base text-white';
       updateHostTimerText();
       syncToScreen({ type: 'SYNC_STATE', state: gameState });
     }
@@ -607,7 +614,7 @@
         } else {
           clearInterval(timerInterval);
           gameState.isPaused = true;
-          document.getElementById('btn-pause').textContent = '▶️ 开始计时';
+          document.getElementById('btn-pause').textContent = '▶️ Start Timer';
           syncToScreen({ type: 'TIME_UP', state: gameState });
         }
       }, 1000);
@@ -617,13 +624,12 @@
       document.getElementById('host-timer-display').textContent = formatTime(gameState.timeLeft);
     }
 
-    // 队伍数量与手动调分
     function setTeamCount(count) {
       const presets = [
-        { name: '红队', score: 0, color: 'rose' },
-        { name: '蓝队', score: 0, color: 'sky' },
-        { name: '绿队', score: 0, color: 'emerald' },
-        { name: '黄队', score: 0, color: 'amber' }
+        { name: 'Red Team', score: 0, color: 'rose' },
+        { name: 'Blue Team', score: 0, color: 'sky' },
+        { name: 'Green Team', score: 0, color: 'emerald' },
+        { name: 'Yellow Team', score: 0, color: 'amber' }
       ];
       gameState.teams = presets.slice(0, count);
       gameState.activeTeamIndex = 0;
@@ -662,9 +668,9 @@
             <div>
               <div class="font-bold text-white flex items-center gap-2">
                 ${team.name}
-                ${isActive ? '<span class="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full">当前答题组</span>' : ''}
+                ${isActive ? '<span class="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full">Active Team</span>' : ''}
               </div>
-              <div class="text-xs text-slate-400">得分: <strong class="text-amber-400 text-base">${team.score}</strong></div>
+              <div class="text-xs text-slate-400">Score: <strong class="text-amber-400 text-base">${team.score}</strong></div>
             </div>
           </div>
           <div class="flex items-center gap-1.5" onclick="event.stopPropagation()">
@@ -677,29 +683,28 @@
       });
     }
 
-    // 投屏战绩复盘切换
     function toggleSummaryScreen() {
       gameState.showSummary = !gameState.showSummary;
       if (gameState.showSummary && !gameState.isPaused) {
-        togglePause(); // 自动暂停计时
+        togglePause();
       }
       const btn = document.getElementById('btn-summary');
-      btn.textContent = gameState.showSummary ? '🔙 返回猜词界面' : '📊 投屏本局战绩复盘';
+      btn.textContent = gameState.showSummary ? '🔙 Back to Guessing View' : '📊 Show Word Review Wall';
       syncToScreen({ type: 'SYNC_STATE', state: gameState });
     }
 
     function resetAllGame() {
-      if (!confirm('确定要清空所有队伍分数和本局复盘记录吗？')) return;
+      if (!confirm('Reset all team scores and session word history?')) return;
       gameState.teams.forEach(t => t.score = 0);
       gameState.history = [];
       gameState.showSummary = false;
       document.getElementById('history-count').textContent = '0';
-      document.getElementById('btn-summary').textContent = '📊 投屏本局战绩复盘';
+      document.getElementById('btn-summary').textContent = '📊 Show Word Review Wall';
       renderHostTeams();
       resetRoundTimer();
     }
 
-    // 自定义词库弹窗
+    // Custom Deck Modal
     function openDeckModal() {
       document.getElementById('deck-modal').classList.remove('hidden');
     }
@@ -707,9 +712,9 @@
       document.getElementById('deck-modal').classList.add('hidden');
     }
     function saveCustomDeck() {
-      const name = document.getElementById('custom-deck-name').value.trim() || '自定义词库';
+      const name = document.getElementById('custom-deck-name').value.trim() || 'Custom Deck';
       const raw = document.getElementById('custom-deck-textarea').value.trim();
-      if (!raw) return alert('请至少输入一个词语');
+      if (!raw) return alert('Please enter at least one word.');
 
       const parsed = raw.split('\n').map(line => {
         const parts = line.split('|').map(s => s.trim());
@@ -721,9 +726,9 @@
       }).filter(item => item.hanzi.length > 0);
 
       const customKey = 'custom_' + Date.now();
-      const saved = JSON.parse(localStorage.getItem('ebci_pictionary_decks') || '{}');
+      const saved = JSON.parse(localStorage.getItem('ebci_pictionary_decks_en') || '{}');
       saved[customKey] = { name, words: parsed };
-      localStorage.setItem('ebci_pictionary_decks', JSON.stringify(saved));
+      localStorage.setItem('ebci_pictionary_decks_en', JSON.stringify(saved));
 
       loadDecks();
       document.getElementById('deck-select').value = customKey;
@@ -731,7 +736,7 @@
       closeDeckModal();
     }
 
-    // ==================== 6. 教室大屏端消息响应与渲染 ====================
+    // ==================== 6. PROJECTOR SCREEN RENDERING ====================
     let revealTimeout = null;
 
     function handleScreenMessage(payload) {
@@ -757,7 +762,6 @@
         AudioEngine.playCorrect();
         triggerConfetti();
 
-        // 先展示 2.2 秒揭晓动画，再自动切回下一题空白格子
         showRevealAnimation(payload.revealed);
         renderScreenScoreboard();
       }
@@ -789,11 +793,10 @@
     }
 
     function renderScreenUI() {
-      document.getElementById('screen-deck-title').textContent = `当前词库：${gameState.deckTitle} · 房间号 ${roomCode}`;
+      document.getElementById('screen-deck-title').textContent = `Deck: ${gameState.deckTitle} · Room ${roomCode}`;
       renderScreenTimer();
       renderScreenScoreboard();
 
-      // 切换复盘视图与主舞台
       const stage = document.getElementById('screen-stage');
       const summaryView = document.getElementById('screen-summary-view');
 
@@ -807,7 +810,6 @@
         renderScreenBoxes();
       }
 
-      // 暂停遮罩控制（仅在时间未归零且非复盘时显示）
       const pauseOverlay = document.getElementById('screen-pause-overlay');
       if (gameState.isPaused && !gameState.showSummary && gameState.timeLeft > 0) {
         pauseOverlay.classList.remove('hidden');
@@ -841,8 +843,9 @@
         boxContainer.appendChild(box);
       }
 
+      const labelWord = count === 1 ? 'Character' : 'Characters';
       document.getElementById('screen-char-count-label').innerHTML =
-        `共 <span class="text-amber-400 text-4xl font-black mx-1">${count}</span> 个字`;
+        `<span class="text-amber-400 text-4xl font-black mr-2">${count}</span> ${labelWord}`;
     }
 
     function renderScreenScoreboard() {
@@ -863,7 +866,7 @@
           <div>
             <div class="flex items-center gap-2">
               <span class="text-2xl font-black text-white">${team.name}</span>
-              ${isActive ? '<span class="text-xs font-bold bg-amber-400 text-slate-950 px-2.5 py-0.5 rounded-full">正在作画</span>' : ''}
+              ${isActive ? '<span class="text-xs font-bold bg-amber-400 text-slate-950 px-2.5 py-0.5 rounded-full">Drawing Now</span>' : ''}
             </div>
           </div>
           <div class="text-5xl font-black text-amber-400 font-mono">${team.score}</div>
@@ -877,7 +880,7 @@
       grid.innerHTML = '';
 
       if (gameState.history.length === 0) {
-        grid.innerHTML = '<p class="text-slate-400 col-span-full text-center py-12 text-xl">本局暂无已完成的词语记录</p>';
+        grid.innerHTML = '<p class="text-slate-400 col-span-full text-center py-12 text-xl">No words recorded in this session yet.</p>';
         return;
       }
 
@@ -894,9 +897,9 @@
             <span class="text-sm font-semibold text-indigo-300">${item.pinyin}</span>
             <span class="text-xs font-bold px-2 py-0.5 rounded-md ${
               isCorrect ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'
-            }">${isCorrect ? '✅ 猜对' : '⏭️ 跳过'}</span>
+            }">${isCorrect ? '✅ Guessed' : '⏭️ Skipped'}</span>
           </div>
-          <div class="text-3xl font-black text-white my-1">${item.hanzi}</div>
+          <div class="zh-text text-3xl font-black text-white my-1">${item.hanzi}</div>
           <div class="text-xs text-slate-400">${item.meaning || ''}</div>
         `;
         grid.appendChild(card);
