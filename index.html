@@ -45,7 +45,7 @@
       </div>
     </div>
 
-    <!-- Deck & Timer Controls -->
+    <!-- Deck & Timer Settings -->
     <div class="flex flex-wrap items-center gap-2.5">
       <select id="deck-select" onchange="changeDeck()" class="bg-slate-800 border border-slate-700 text-xs font-semibold rounded-xl px-3 py-2 text-slate-200 focus:outline-none">
       </select>
@@ -56,7 +56,7 @@
 
       <!-- Adjustable Round Time -->
       <div class="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1">
-        <span class="text-xs text-slate-400">Time(s):</span>
+        <span class="text-xs text-slate-400">Round(s):</span>
         <input
           id="duration-input"
           type="number"
@@ -64,12 +64,9 @@
           min="10"
           max="600"
           step="5"
-          onchange="resetRoundTimer()"
+          onchange="resetTimeOnly()"
           class="w-14 bg-slate-950 border border-slate-700 rounded-lg text-center font-bold text-amber-400 focus:outline-none text-xs py-1"
         />
-        <button onclick="resetRoundTimer()" class="text-xs font-bold bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded-lg transition">
-          Reset
-        </button>
       </div>
 
       <!-- Review Wall Toggle -->
@@ -78,10 +75,17 @@
       </button>
     </div>
 
-    <!-- Giant Countdown Capsule -->
-    <div class="flex items-center gap-3 bg-slate-950 border-2 border-slate-800 px-5 py-1.5 rounded-2xl">
+    <!-- Giant Countdown Capsule + Instant Time Reset Button -->
+    <div class="flex items-center gap-3 bg-slate-950 border-2 border-slate-800 px-4 py-1.5 rounded-2xl">
       <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Time</span>
       <span id="main-timer" class="text-4xl font-black font-mono text-amber-400">01:30</span>
+      <button
+        onclick="resetTimeOnly()"
+        title="Reset timer anytime without changing current word"
+        class="ml-1 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 hover:text-white active:scale-95 text-xs font-bold text-amber-300 border border-slate-700 transition flex items-center gap-1"
+      >
+        🔄 Reset Time
+      </button>
     </div>
   </header>
 
@@ -94,23 +98,28 @@
         🙈 CLASS: CLOSE YOUR EYES!
       </div>
       <h2 class="text-3xl md:text-4xl font-black text-white mb-2">Artist's Turn to Peek</h2>
-      <p class="text-slate-400 text-sm mb-8">Make sure the class cannot see the screen, then click below to view the secret word.</p>
+      <p class="text-slate-400 text-sm mb-8">Make sure the class cannot see the screen, then click below to view the secret word & meaning.</p>
 
       <button onclick="revealWordToArtist()" class="w-full py-5 px-8 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] transition font-black text-xl text-white shadow-xl shadow-indigo-600/30">
         👁️ Artist: Click to View Secret Word
       </button>
     </div>
 
-    <!-- STATE B: ARTIST PEEKING CARD (Shows Hanzi + Pinyin + Meaning with 4s auto-hide bar) -->
+    <!-- STATE B: ARTIST PEEKING CARD (Prominent Hanzi + Pinyin + English Meaning) -->
     <div id="stage-peek-word" class="hidden w-full max-w-2xl bg-indigo-950/90 border-4 border-indigo-400 rounded-3xl p-8 md:p-10 text-center shadow-2xl animate-pop">
       <div class="text-xs font-bold uppercase tracking-widest text-indigo-300 mb-2">
-        Memorize & Draw on Whiteboard! (Auto-hiding in <span id="peek-countdown">4</span>s)
+        Memorize & Draw on Whiteboard! (Auto-hiding in <span id="peek-countdown">6</span>s)
       </div>
 
-      <div class="my-6 py-6 px-4 rounded-2xl bg-slate-950/80 border border-indigo-500/30">
+      <div class="my-5 py-6 px-6 rounded-2xl bg-slate-950/90 border border-indigo-500/40">
         <div id="peek-pinyin" class="text-3xl font-bold text-indigo-300 mb-2">dǎ lán qiú</div>
-        <div id="peek-hanzi" class="zh-text text-7xl md:text-8xl font-black text-white tracking-wider mb-3">打篮球</div>
-        <div id="peek-meaning" class="text-lg text-slate-300">play basketball</div>
+        <div id="peek-hanzi" class="zh-text text-7xl md:text-8xl font-black text-white tracking-wider mb-5">打篮球</div>
+        
+        <!-- Prominent English Meaning Box -->
+        <div class="inline-block w-full max-w-md bg-amber-500/15 border-2 border-amber-400/50 rounded-2xl px-5 py-3">
+          <span class="block text-[11px] font-black uppercase tracking-widest text-amber-400/80 mb-0.5">English Meaning</span>
+          <span id="peek-meaning" class="text-2xl font-black text-amber-300">play basketball</span>
+        </div>
       </div>
 
       <!-- Progress bar -->
@@ -118,7 +127,7 @@
         <div id="peek-progress-bar" class="h-full bg-amber-400 transition-all duration-100" style="width: 100%"></div>
       </div>
 
-      <button onclick="hideWordAndStartDrawing()" class="w-full py-4 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-500 font-black text-lg text-white transition">
+      <button onclick="hideWordAndStartDrawing()" class="w-full py-4 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-500 font-black text-lg text-white transition shadow-lg shadow-emerald-600/20">
         🙈 Hide Word & Start Drawing Now!
       </button>
     </div>
@@ -158,8 +167,8 @@
     <div id="stage-reveal" class="hidden text-center animate-pop bg-emerald-950/95 border-4 border-emerald-400 rounded-3xl px-14 py-10 shadow-2xl">
       <div class="text-emerald-300 font-bold text-xl mb-2">🎉 Correct! (+1 Point)</div>
       <div id="reveal-pinyin" class="text-3xl font-bold text-emerald-200 mb-2">dǎ lán qiú</div>
-      <div id="reveal-hanzi" class="zh-text text-7xl md:text-8xl font-black text-white tracking-wider mb-2">打篮球</div>
-      <div id="reveal-meaning" class="text-base text-emerald-300/80">play basketball</div>
+      <div id="reveal-hanzi" class="zh-text text-7xl md:text-8xl font-black text-white tracking-wider mb-3">打篮球</div>
+      <div id="reveal-meaning" class="text-xl font-bold text-amber-300">play basketball</div>
     </div>
 
     <!-- PAUSE OVERLAY -->
@@ -167,9 +176,14 @@
       <div class="text-6xl mb-3">⏸️</div>
       <div class="text-4xl font-black text-white tracking-wider mb-2">GAME PAUSED</div>
       <p class="text-slate-400 text-base mb-6">Listen to your teacher's explanation</p>
-      <button onclick="togglePause()" class="px-8 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 font-bold text-white text-lg">
-        ▶️ Resume Game
-      </button>
+      <div class="flex gap-3">
+        <button onclick="togglePause()" class="px-8 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 font-bold text-white text-lg">
+          ▶️ Resume Game
+        </button>
+        <button onclick="resetTimeOnly()" class="px-6 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 font-bold text-amber-300 text-base border border-slate-700">
+          🔄 Reset Time
+        </button>
+      </div>
     </div>
   </main>
 
@@ -433,24 +447,25 @@
       setStageView('stage-shield');
     }
 
-    // Step 2: Artist clicks to peek for 4 seconds
+    // Step 2: Artist clicks to peek for 6 seconds (Shows Hanzi + Pinyin + Prominent English Meaning)
     function revealWordToArtist() {
       AudioEngine.init();
       document.getElementById('peek-hanzi').textContent = currentWord.hanzi;
       document.getElementById('peek-pinyin').textContent = currentWord.pinyin;
-      document.getElementById('peek-meaning').textContent = currentWord.meaning || '';
+      document.getElementById('peek-meaning').textContent = currentWord.meaning || '(No English translation)';
       setStageView('stage-peek-word');
 
-      let msLeft = 4000;
+      const totalMs = 6000;
+      let msLeft = totalMs;
       const bar = document.getElementById('peek-progress-bar');
       const countLabel = document.getElementById('peek-countdown');
       bar.style.width = '100%';
-      countLabel.textContent = '4';
+      countLabel.textContent = '6';
 
       clearInterval(peekTimer);
       peekTimer = setInterval(() => {
         msLeft -= 100;
-        bar.style.width = `${Math.max(0, (msLeft / 4000) * 100)}%`;
+        bar.style.width = `${Math.max(0, (msLeft / totalMs) * 100)}%`;
         countLabel.textContent = Math.ceil(msLeft / 1000);
         if (msLeft <= 0) {
           clearInterval(peekTimer);
@@ -459,7 +474,6 @@
       }, 100);
     }
 
-    // Re-peek if artist forgot
     function rePeekWord() {
       pauseTimerSilently();
       setStageView('stage-shield');
@@ -523,7 +537,7 @@
       prepareNextWord();
     }
 
-    // ==================== 4. TIMER & PAUSE CONTROLS ====================
+    // ==================== 4. TIMER & INDEPENDENT RESET CONTROLS ====================
     function resumeTimer() {
       isPaused = false;
       document.getElementById('pause-overlay').classList.add('hidden');
@@ -538,7 +552,7 @@
           clearInterval(timerInterval);
           isPaused = true;
           AudioEngine.playTimeUp();
-          alert("⏰ Time's Up! Switch to the next team.");
+          alert("⏰ Time's Up! Switch to the next team or click 'Reset Time'.");
         }
       }, 1000);
     }
@@ -557,12 +571,16 @@
       }
     }
 
-    function resetRoundTimer() {
-      pauseTimerSilently();
-      document.getElementById('pause-overlay').classList.add('hidden');
+    // Reset ONLY the timer without discarding the current word
+    function resetTimeOnly() {
+      AudioEngine.init();
+      AudioEngine.playChime();
       timeLeft = Math.max(5, parseInt(document.getElementById('duration-input').value, 10) || 90);
       updateTimerDisplay();
-      prepareNextWord();
+      // If currently actively guessing, keep running smoothly from full time; otherwise stay ready
+      if (!isPaused && !document.getElementById('stage-guessing').classList.contains('hidden')) {
+        resumeTimer();
+      }
     }
 
     function updateTimerDisplay() {
@@ -679,7 +697,8 @@
       document.getElementById('history-count').textContent = '0';
       renderScoreboard();
       renderSummaryGrid();
-      resetRoundTimer();
+      resetTimeOnly();
+      prepareNextWord();
     }
 
     // ==================== 6. AUTO PINYIN & ENGLISH MEANING ENGINE ====================
