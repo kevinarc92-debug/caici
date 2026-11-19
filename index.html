@@ -3,783 +3,802 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chinese Pictionary · Single-Screen Classroom Game</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
-  <script src="https://unpkg.com/pinyin-pro@3.26.0/dist/index.js"></script>
+  <title>Year of the Sheep: Golden Harvest</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=Noto+Sans+SC:wght@500;700;900&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
     body {
-      font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
-      user-select: none;
+      overflow: hidden;
+      background: #8b1111;
+      font-family: "Segoe UI", "PingFang SC", "Helvetica Neue", sans-serif;
+      color: #fff;
     }
-    .zh-text {
-      font-family: 'Noto Sans SC', sans-serif;
+    canvas { display: block; width: 100vw; height: 100vh; }
+
+    /* 主持人中文鼠标导播台 */
+    #host-panel {
+      position: fixed;
+      top: 14px;
+      right: 16px;
+      background: rgba(32, 6, 6, 0.86);
+      border: 1.5px solid rgba(255, 215, 0, 0.5);
+      border-radius: 12px;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      font-size: 13px;
+      backdrop-filter: blur(6px);
+      z-index: 100;
+      max-width: 330px;
     }
-    @keyframes popIn {
-      0% { transform: scale(0.85); opacity: 0; }
-      70% { transform: scale(1.05); }
-      100% { transform: scale(1); opacity: 1; }
+    #host-panel.hidden { display: none; }
+    .host-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
+    .host-badge {
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-size: 12px;
+      font-weight: bold;
     }
-    .animate-pop {
-      animation: popIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    .connected { background: #16a34a; color: #fff; }
+    .disconnected { background: #991b1b; color: #fca5a5; }
+    button, .file-btn {
+      background: linear-gradient(180deg, #ffd700, #e6a800);
+      color: #5c0000;
+      border: none;
+      border-radius: 6px;
+      padding: 4px 9px;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 12px;
+      transition: transform 0.1s;
+      display: inline-block;
     }
-    @keyframes pulseUrgent {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.08); }
+    button:active, .file-btn:active { transform: scale(0.94); }
+    button.secondary, .file-btn.secondary {
+      background: rgba(255, 255, 255, 0.16);
+      color: #ffe4a0;
+      border: 1px solid rgba(255, 215, 0, 0.35);
     }
-    .urgent-timer {
-      animation: pulseUrgent 0.8s infinite;
+    button.active-diff {
+      background: #ef4444;
+      color: #fff;
+      border: 1px solid #ffd700;
     }
+    .tip-text { font-size: 11px; color: #fcd34d; opacity: 0.92; line-height: 1.35; }
+    #diag-box {
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-family: monospace;
+      font-size: 11px;
+      color: #a7f3d0;
+      line-height: 1.35;
+      word-break: break-all;
+    }
+    #cors-tip { font-size: 11px; color: #fca5a5; display: none; line-height: 1.35; }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between p-4 md:p-6 overflow-x-hidden">
+<body>
 
-  <!-- ==================== 1. TOP CONTROL BAR ==================== -->
-  <header class="bg-slate-900/90 border border-slate-800 rounded-2xl px-5 py-3 flex flex-wrap items-center justify-between gap-3 z-20 shadow-lg">
-    <div class="flex items-center gap-3">
-      <span class="text-2xl">🎨</span>
+  <!-- 主持人中文控制面板 (按 H 键可随时隐藏/显示) -->
+  <div id="host-panel">
+    <div class="host-row">
+      <span>🎮 手柄状态:</span>
+      <span id="pad-status" class="host-badge disconnected">未连接</span>
+    </div>
+    <div class="host-row">
+      <button onclick="connectWebHID()" style="width:100%; background:linear-gradient(180deg,#4ade80,#16a34a); color:#052e16;">
+        🔌 强制直连 Switch 手柄 (Mac蓝牙连上但无反应点此)
+      </button>
+    </div>
+    <div id="diag-box">信号诊断: 等待手柄输入 (也可直接用键盘 ←/→ 测试)</div>
+    <div class="host-row">
+      <span>🕹️ 握持方式:</span>
+      <button class="secondary" onclick="cycleJoyMode()" id="mode-btn">单只左手柄 (L) 横握</button>
+    </div>
+    <div class="host-row">
+      <span>🔥 难度设置:</span>
       <div>
-        <h1 class="text-lg font-black text-white leading-tight">Chinese Pictionary</h1>
-        <span class="text-xs text-slate-400">Words left: <strong id="remaining-count" class="text-white">0</strong></span>
+        <button class="secondary" id="diff-easy" onclick="setDifficulty('EASY')">普通</button>
+        <button class="active-diff" id="diff-hard" onclick="setDifficulty('HARD')">困难</button>
+        <button class="secondary" id="diff-hell" onclick="setDifficulty('HELL')">地狱</button>
       </div>
     </div>
-
-    <!-- Deck & Timer Settings -->
-    <div class="flex flex-wrap items-center gap-2.5">
-      <select id="deck-select" onchange="changeDeck()" class="bg-slate-800 border border-slate-700 text-xs font-semibold rounded-xl px-3 py-2 text-slate-200 focus:outline-none">
-      </select>
-
-      <button onclick="openDeckModal()" class="text-xs font-bold bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 px-3 py-2 rounded-xl text-indigo-300 transition">
-        ✨ + Add / Auto-Gen Words
-      </button>
-
-      <!-- Adjustable Round Time -->
-      <div class="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1">
-        <span class="text-xs text-slate-400">Round(s):</span>
-        <input
-          id="duration-input"
-          type="number"
-          value="90"
-          min="10"
-          max="600"
-          step="5"
-          onchange="resetTimeOnly()"
-          class="w-14 bg-slate-950 border border-slate-700 rounded-lg text-center font-bold text-amber-400 focus:outline-none text-xs py-1"
-        />
-      </div>
-
-      <!-- Review Wall Toggle -->
-      <button onclick="toggleSummaryScreen()" id="btn-summary" class="text-xs font-bold px-3.5 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 transition">
-        📊 Word Review (<span id="history-count">0</span>)
-      </button>
-    </div>
-
-    <!-- Giant Countdown Capsule + Instant Time Reset Button -->
-    <div class="flex items-center gap-3 bg-slate-950 border-2 border-slate-800 px-4 py-1.5 rounded-2xl">
-      <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Time</span>
-      <span id="main-timer" class="text-4xl font-black font-mono text-amber-400">01:30</span>
-      <button
-        onclick="resetTimeOnly()"
-        title="Reset timer anytime without changing current word"
-        class="ml-1 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 hover:text-white active:scale-95 text-xs font-bold text-amber-300 border border-slate-700 transition flex items-center gap-1"
-      >
-        🔄 Reset Time
-      </button>
-    </div>
-  </header>
-
-  <!-- ==================== 2. CENTER STAGE (PEEK / GUESS / REVEAL) ==================== -->
-  <main id="main-stage" class="flex-1 flex flex-col items-center justify-center my-4 relative">
-
-    <!-- STATE A: PEEK SHIELD (Class closes eyes, Artist clicks to see word) -->
-    <div id="stage-shield" class="w-full max-w-2xl bg-slate-900/95 border-2 border-indigo-500/50 rounded-3xl p-8 md:p-10 text-center shadow-2xl animate-pop">
-      <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold text-sm mb-4">
-        🙈 CLASS: CLOSE YOUR EYES!
-      </div>
-      <h2 class="text-3xl md:text-4xl font-black text-white mb-2">Artist's Turn to Peek</h2>
-      <p class="text-slate-400 text-sm mb-8">Make sure the class cannot see the screen, then click below to view the secret word & meaning.</p>
-
-      <button onclick="revealWordToArtist()" class="w-full py-5 px-8 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] transition font-black text-xl text-white shadow-xl shadow-indigo-600/30">
-        👁️ Artist: Click to View Secret Word
-      </button>
-    </div>
-
-    <!-- STATE B: ARTIST PEEKING CARD (Prominent Hanzi + Pinyin + English Meaning) -->
-    <div id="stage-peek-word" class="hidden w-full max-w-2xl bg-indigo-950/90 border-4 border-indigo-400 rounded-3xl p-8 md:p-10 text-center shadow-2xl animate-pop">
-      <div class="text-xs font-bold uppercase tracking-widest text-indigo-300 mb-2">
-        Memorize & Draw on Whiteboard! (Auto-hiding in <span id="peek-countdown">6</span>s)
-      </div>
-
-      <div class="my-5 py-6 px-6 rounded-2xl bg-slate-950/90 border border-indigo-500/40">
-        <div id="peek-pinyin" class="text-3xl font-bold text-indigo-300 mb-2">dǎ lán qiú</div>
-        <div id="peek-hanzi" class="zh-text text-7xl md:text-8xl font-black text-white tracking-wider mb-5">打篮球</div>
-        
-        <!-- Prominent English Meaning Box -->
-        <div class="inline-block w-full max-w-md bg-amber-500/15 border-2 border-amber-400/50 rounded-2xl px-5 py-3">
-          <span class="block text-[11px] font-black uppercase tracking-widest text-amber-400/80 mb-0.5">English Meaning</span>
-          <span id="peek-meaning" class="text-2xl font-black text-amber-300">play basketball</span>
-        </div>
-      </div>
-
-      <!-- Progress bar -->
-      <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden mb-5">
-        <div id="peek-progress-bar" class="h-full bg-amber-400 transition-all duration-100" style="width: 100%"></div>
-      </div>
-
-      <button onclick="hideWordAndStartDrawing()" class="w-full py-4 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-500 font-black text-lg text-white transition shadow-lg shadow-emerald-600/20">
-        🙈 Hide Word & Start Drawing Now!
-      </button>
-    </div>
-
-    <!-- STATE C: PUBLIC GUESSING BOXES (Safe for class to open eyes) -->
-    <div id="stage-guessing" class="hidden text-center w-full max-w-4xl">
-      <div class="inline-block px-5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold text-base mb-6">
-        👀 OPEN YOUR EYES! Watch the whiteboard and guess in Chinese!
-      </div>
-
-      <!-- Character Boxes -->
-      <div id="char-boxes" class="flex flex-wrap items-center justify-center gap-5 my-4">
-      </div>
-
-      <div id="char-count-label" class="mt-4 text-xl font-bold text-slate-400">
-        <span class="text-amber-400 text-3xl font-black">3</span> Characters
-      </div>
-
-      <!-- Teacher Quick Action Bar -->
-      <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
-        <button onclick="handleCorrect()" class="py-3.5 px-7 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition font-black text-lg text-white shadow-lg shadow-emerald-600/25">
-          ✅ Correct (+1)
-        </button>
-        <button onclick="handleSkip()" class="py-3.5 px-6 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 transition font-bold text-base text-slate-200 border border-slate-700">
-          ⏭️ Skip Word
-        </button>
-        <button id="btn-pause" onclick="togglePause()" class="py-3.5 px-6 rounded-2xl bg-amber-600 hover:bg-amber-500 active:scale-95 transition font-bold text-base text-white">
-          ⏸️ Pause
-        </button>
-        <button onclick="rePeekWord()" class="py-3.5 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 text-xs font-semibold text-slate-400 border border-slate-800">
-          👁️ Re-peek (Artist)
-        </button>
-      </div>
-    </div>
-
-    <!-- STATE D: CORRECT CELEBRATION CARD -->
-    <div id="stage-reveal" class="hidden text-center animate-pop bg-emerald-950/95 border-4 border-emerald-400 rounded-3xl px-14 py-10 shadow-2xl">
-      <div class="text-emerald-300 font-bold text-xl mb-2">🎉 Correct! (+1 Point)</div>
-      <div id="reveal-pinyin" class="text-3xl font-bold text-emerald-200 mb-2">dǎ lán qiú</div>
-      <div id="reveal-hanzi" class="zh-text text-7xl md:text-8xl font-black text-white tracking-wider mb-3">打篮球</div>
-      <div id="reveal-meaning" class="text-xl font-bold text-amber-300">play basketball</div>
-    </div>
-
-    <!-- PAUSE OVERLAY -->
-    <div id="pause-overlay" class="hidden absolute inset-0 bg-slate-950/90 backdrop-blur-md rounded-3xl flex flex-col items-center justify-center z-30 border border-slate-800">
-      <div class="text-6xl mb-3">⏸️</div>
-      <div class="text-4xl font-black text-white tracking-wider mb-2">GAME PAUSED</div>
-      <p class="text-slate-400 text-base mb-6">Listen to your teacher's explanation</p>
-      <div class="flex gap-3">
-        <button onclick="togglePause()" class="px-8 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 font-bold text-white text-lg">
-          ▶️ Resume Game
-        </button>
-        <button onclick="resetTimeOnly()" class="px-6 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 font-bold text-amber-300 text-base border border-slate-700">
-          🔄 Reset Time
-        </button>
-      </div>
-    </div>
-  </main>
-
-  <!-- ==================== 3. SESSION WORD REVIEW WALL ==================== -->
-  <div id="summary-view" class="hidden flex-1 my-3 bg-slate-900/95 border border-slate-800 rounded-3xl p-6 overflow-y-auto z-20">
-    <div class="flex flex-wrap items-center justify-between gap-4 mb-5">
+    <div class="host-row">
+      <span>🎯 领奖目标分:</span>
       <div>
-        <h2 class="text-2xl font-black text-white">📊 Session Vocabulary Review</h2>
-        <p class="text-xs text-slate-400 mt-0.5">Read aloud together and try making sentences with these words!</p>
-      </div>
-      <div class="flex items-center gap-3">
-        <button onclick="resetAllGame()" class="text-xs font-semibold px-3 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 border border-rose-800/50">
-          🗑️ Clear History & Scores
-        </button>
-        <button onclick="toggleSummaryScreen()" class="text-xs font-bold px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white">
-          🔙 Back to Game
-        </button>
+        <button class="secondary" onclick="adjustTarget(-200)">-200</button>
+        <strong id="target-display" style="color:#ffd700; margin:0 6px;">2000</strong>
+        <button class="secondary" onclick="adjustTarget(200)">+200</button>
       </div>
     </div>
-    <div id="summary-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
+    <div class="host-row">
+      <button onclick="triggerRain()">🌧️ 红包雨</button>
+      <button class="secondary" onclick="resetToIdle()">🏠 重置</button>
+      <label class="file-btn secondary">
+        📂 导入4图
+        <input type="file" id="asset-picker" accept="image/*" multiple style="display:none" onchange="handleManualFiles(this.files)" />
+      </label>
+      <button class="secondary" onclick="toggleHostPanel()" title="按 H 键可重新呼出">👁️ 隐藏</button>
     </div>
+    <div id="cors-tip">⚠️ 本地直接双击打开(file://)时，请点「导入4图」全选4张图片以完成自动抠图。</div>
+    <div class="tip-text">💡 导播技巧：鼠标点屏幕任意处可空投 +300 巨型元宝；按键盘 <b>H</b> 键可隐藏/显示本面板。</div>
   </div>
 
-  <!-- ==================== 4. BOTTOM SCOREBOARD WITH MANUAL ADJUSTMENT ==================== -->
-  <footer class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 z-20">
-    <div class="flex items-center justify-between mb-2.5 px-1">
-      <span class="text-xs font-bold text-slate-400">
-        🏆 Team Scoreboard <span class="font-normal text-slate-500">(Click a team card to select active drawing team)</span>
-      </span>
-      <div class="flex items-center gap-1.5">
-        <button onclick="setTeamCount(2)" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">2 Teams</button>
-        <button onclick="setTeamCount(3)" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">3 Teams</button>
-        <button onclick="setTeamCount(4)" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">4 Teams</button>
-      </div>
-    </div>
+  <canvas id="game"></canvas>
 
-    <div id="scoreboard-grid" class="grid grid-cols-2 md:grid-cols-4 gap-3">
-    </div>
-  </footer>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
 
-  <!-- ==================== 5. SMART AUTO-GENERATE DECK MODAL ==================== -->
-  <div id="deck-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-    <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-3xl w-full p-6 shadow-2xl max-h-[90vh] flex flex-col">
-      <div class="flex items-center justify-between mb-4">
-        <div>
-          <h3 class="text-xl font-black text-white">✨ Smart Vocabulary Generator</h3>
-          <p class="text-xs text-slate-400 mt-0.5">Just paste Chinese characters — Pinyin & English meanings are generated automatically!</p>
-        </div>
-        <button onclick="closeDeckModal()" class="text-slate-400 hover:text-white text-2xl">&times;</button>
-      </div>
+let W = canvas.width = window.innerWidth;
+let H = canvas.height = window.innerHeight;
+window.addEventListener('resize', () => {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  player.y = H - 115;
+});
 
-      <div class="grid grid-cols-1 md:grid-cols-12 gap-4 overflow-y-auto flex-1 pr-1">
-        <div class="md:col-span-5 flex flex-col">
-          <label class="text-xs font-bold text-slate-400 uppercase mb-1.5">1. Deck Title</label>
-          <input id="custom-deck-name" type="text" value="Lesson Vocabulary" class="w-full mb-3 bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+function toggleHostPanel() {
+  document.getElementById('host-panel').classList.toggle('hidden');
+}
 
-          <label class="text-xs font-bold text-slate-400 uppercase mb-1.5">2. Paste Chinese Words (One per line)</label>
-          <textarea id="raw-hanzi-input" rows="8" class="w-full flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3.5 text-base zh-text text-slate-100 focus:outline-none focus:border-indigo-500" placeholder="吃火锅
-买东西
-坐地铁
-看电影
-喝奶茶"></textarea>
+// ================= 美术素材加载与自动贴纸去底 =================
+const assets = { bg: null, sheep: null, items: null, chest: null };
 
-          <button id="btn-auto-gen" onclick="autoGenerateWords()" class="mt-3 w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm transition">
-            ✨ Auto-Generate Pinyin & Meaning
-          </button>
-        </div>
+function removeStickerBg(img) {
+  try {
+    const off = document.createElement('canvas');
+    off.width = img.width;
+    off.height = img.height;
+    const octx = off.getContext('2d');
+    octx.drawImage(img, 0, 0);
 
-        <div class="md:col-span-7 flex flex-col bg-slate-950/70 border border-slate-800 rounded-2xl p-4">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-bold text-indigo-300 uppercase">3. Auto-Generated Preview (Editable)</span>
-            <span id="gen-status-text" class="text-xs text-slate-400">0 words ready</span>
-          </div>
+    const imgData = octx.getImageData(0, 0, off.width, off.height);
+    const data = imgData.data;
+    const w = off.width, h = off.height;
 
-          <div id="generated-preview-list" class="flex-1 overflow-y-auto space-y-2 max-h-72 pr-1">
-            <div class="text-center text-slate-500 text-xs py-16">
-              Paste Chinese words on the left and click<br/><strong class="text-amber-400">"Auto-Generate Pinyin & Meaning"</strong>
-            </div>
-          </div>
-        </div>
-      </div>
+    const corners = [0, (w - 1) * 4, (h - 1) * w * 4, ((h - 1) * w + (w - 1)) * 4];
+    let bgR = 0, bgG = 0, bgB = 0;
+    corners.forEach(idx => { bgR += data[idx]; bgG += data[idx + 1]; bgB += data[idx + 2]; });
+    bgR /= 4; bgG /= 4; bgB /= 4;
 
-      <div class="mt-5 pt-4 border-t border-slate-800 flex justify-end gap-3">
-        <button onclick="closeDeckModal()" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-sm font-semibold">Cancel</button>
-        <button onclick="saveGeneratedDeck()" class="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold">
-          ✅ Save & Use This Deck
-        </button>
-      </div>
-    </div>
-  </div>
+    const visited = new Uint8Array(w * h);
+    const queue = new Int32Array(w * h);
+    let head = 0, tail = 0;
 
-  <script>
-    // ==================== 1. PRESET WORD DECKS ====================
-    const DEFAULT_DECKS = {
-      hsk12: {
-        name: "HSK 1-2 Essentials",
-        words: [
-          { hanzi: "熊猫", pinyin: "xióng māo", meaning: "panda" },
-          { hanzi: "面条", pinyin: "miàn tiáo", meaning: "noodles" },
-          { hanzi: "下雨", pinyin: "xià yǔ", meaning: "to rain" },
-          { hanzi: "游泳", pinyin: "yóu yǒng", meaning: "to swim" },
-          { hanzi: "打篮球", pinyin: "dǎ lán qiú", meaning: "play basketball" },
-          { hanzi: "打电话", pinyin: "dǎ diàn huà", meaning: "make a phone call" },
-          { hanzi: "西瓜", pinyin: "xī guā", meaning: "watermelon" },
-          { hanzi: "睡觉", pinyin: "shuì jiào", meaning: "to sleep" },
-          { hanzi: "看书", pinyin: "kàn shū", meaning: "read a book" },
-          { hanzi: "喝咖啡", pinyin: "hē kā fēi", meaning: "drink coffee" },
-          { hanzi: "飞机", pinyin: "fēi jī", meaning: "airplane" },
-          { hanzi: "跳舞", pinyin: "tiào wǔ", meaning: "to dance" },
-          { hanzi: "唱歌", pinyin: "chàng gē", meaning: "to sing" },
-          { hanzi: "苹果", pinyin: "píng guǒ", meaning: "apple" },
-          { hanzi: "医生", pinyin: "yī shēng", meaning: "doctor" }
-        ]
-      },
-      hsk34: {
-        name: "HSK 3-4 Daily Life",
-        words: [
-          { hanzi: "堵车", pinyin: "dǔ chē", meaning: "traffic jam" },
-          { hanzi: "迟到", pinyin: "chí dào", meaning: "to be late" },
-          { hanzi: "感冒", pinyin: "gǎn mào", meaning: "catch a cold" },
-          { hanzi: "过生日", pinyin: "guò shēng rì", meaning: "celebrate birthday" },
-          { hanzi: "爬山", pinyin: "pá shān", meaning: "climb a mountain" },
-          { hanzi: "照相", pinyin: "zhào xiàng", meaning: "take a photo" },
-          { hanzi: "眼镜", pinyin: "yǎn jìng", meaning: "glasses" },
-          { hanzi: "刷牙", pinyin: "shuā yá", meaning: "brush teeth" },
-          { hanzi: "吃火锅", pinyin: "chī huǒ guō", meaning: "eat hotpot" },
-          { hanzi: "行李箱", pinyin: "xíng li xiāng", meaning: "suitcase" },
-          { hanzi: "减肥", pinyin: "jiǎn féi", meaning: "lose weight" },
-          { hanzi: "加班", pinyin: "jiā bān", meaning: "work overtime" }
-        ]
-      },
-      idioms: {
-        name: "Advanced Chinese Idioms",
-        words: [
-          { hanzi: "画蛇添足", pinyin: "huà shé tiān zú", meaning: "ruin something by adding superfluous details" },
-          { hanzi: "对牛弹琴", pinyin: "duì niú tán qín", meaning: "preach to deaf ears" },
-          { hanzi: "盲人摸象", pinyin: "máng rén mō xiàng", meaning: "take a part for the whole" },
-          { hanzi: "守株待兔", pinyin: "shǒu zhū dài tù", meaning: "wait for windfalls without effort" },
-          { hanzi: "拔苗助长", pinyin: "bá miáo zhù zhǎng", meaning: "spoil things by excessive enthusiasm" },
-          { hanzi: "井底之蛙", pinyin: "jǐng dǐ zhī wā", meaning: "a person with a very limited outlook" },
-          { hanzi: "狐假虎威", pinyin: "hú jiǎ hǔ wēi", meaning: "bully others by flaunting powerful connections" },
-          { hanzi: "掩耳盗铃", pinyin: "yǎn ěr dào líng", meaning: "deceive oneself" }
-        ]
-      }
+    function pushIfMatch(x, y) {
+      if (x < 0 || x >= w || y < 0 || y >= h) return;
+      const pos = y * w + x;
+      if (visited[pos]) return;
+      const idx = pos * 4;
+      const diff = Math.abs(data[idx] - bgR) + Math.abs(data[idx + 1] - bgG) + Math.abs(data[idx + 2] - bgB);
+      if (diff < 36) { visited[pos] = 1; queue[tail++] = pos; }
+    }
+
+    for (let x = 0; x < w; x++) { pushIfMatch(x, 0); pushIfMatch(x, h - 1); }
+    for (let y = 0; y < h; y++) { pushIfMatch(0, y); pushIfMatch(w - 1, y); }
+
+    while (head < tail) {
+      const pos = queue[head++];
+      data[pos * 4 + 3] = 0;
+      const x = pos % w;
+      const y = (pos - x) / w;
+      pushIfMatch(x + 1, y); pushIfMatch(x - 1, y); pushIfMatch(x, y + 1); pushIfMatch(x, y - 1);
+    }
+
+    octx.putImageData(imgData, 0, 0);
+    return off;
+  } catch (err) {
+    document.getElementById('cors-tip').style.display = 'block';
+    return img;
+  }
+}
+
+function loadImage(src, needCutout, key) {
+  const img = new Image();
+  img.onload = () => { assets[key] = needCutout ? removeStickerBg(img) : img; };
+  img.src = src;
+}
+
+loadImage('bg.jpg', false, 'bg');
+loadImage('sheep.jpg', true, 'sheep');
+loadImage('items.jpg', true, 'items');
+loadImage('chest.jpg', true, 'chest');
+
+function handleManualFiles(fileList) {
+  Array.from(fileList).forEach(file => {
+    const name = file.name.toLowerCase();
+    let key = null;
+    if (name.includes('bg') || name.includes('背景')) key = 'bg';
+    else if (name.includes('sheep') || name.includes('羊')) key = 'sheep';
+    else if (name.includes('item') || name.includes('道具')) key = 'items';
+    else if (name.includes('chest') || name.includes('箱')) key = 'chest';
+    if (!key) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        assets[key] = (key !== 'bg') ? removeStickerBg(img) : img;
+        document.getElementById('cors-tip').style.display = 'none';
+      };
+      img.src = e.target.result;
     };
+    reader.readAsDataURL(file);
+  });
+}
 
-    // ==================== 2. WEB AUDIO SYNTHESIZER ====================
-    const AudioEngine = {
-      ctx: null,
-      init() {
-        if (!this.ctx) {
-          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        if (this.ctx.state === 'suspended') this.ctx.resume();
-      },
-      playTone(freq, type, duration, delay = 0, vol = 0.25) {
-        this.init();
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, this.ctx.currentTime + delay);
-        gain.gain.setValueAtTime(vol, this.ctx.currentTime + delay);
-        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + delay + duration);
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.start(this.ctx.currentTime + delay);
-        osc.stop(this.ctx.currentTime + delay + duration);
-      },
-      playCorrect() {
-        this.playTone(523.25, 'triangle', 0.15, 0, 0.3);
-        this.playTone(659.25, 'triangle', 0.15, 0.1, 0.3);
-        this.playTone(783.99, 'triangle', 0.35, 0.2, 0.35);
-        this.playTone(1046.5, 'sine', 0.45, 0.3, 0.3);
-      },
-      playSkip() {
-        this.playTone(350, 'sawtooth', 0.15, 0, 0.15);
-        this.playTone(260, 'sawtooth', 0.25, 0.12, 0.15);
-      },
-      playTick() {
-        this.playTone(880, 'sine', 0.06, 0, 0.2);
-      },
-      playTimeUp() {
-        this.playTone(220, 'sawtooth', 0.6, 0, 0.3);
-        this.playTone(185, 'sawtooth', 0.7, 0.15, 0.3);
-      },
-      playChime() {
-        this.playTone(659.25, 'sine', 0.15, 0, 0.2);
-        this.playTone(880, 'sine', 0.25, 0.1, 0.2);
+// ================= 音效合成器 =================
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+function initAudio() {
+  if (!audioCtx) audioCtx = new AudioCtx();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playTone(freq, type, duration, vol = 0.15, slideTo = null) {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, audioCtx.currentTime + duration);
+  gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + duration);
+}
+
+const sfx = {
+  coin: () => { playTone(880, 'sine', 0.12, 0.16, 1320); },
+  ingot: () => { playTone(1046, 'triangle', 0.15, 0.22, 1568); setTimeout(() => playTone(1568, 'sine', 0.22, 0.16), 70); },
+  bomb: () => { playTone(140, 'sawtooth', 0.42, 0.3, 38); },
+  dash: () => { playTone(320, 'sine', 0.1, 0.12, 620); },
+  rush: () => { playTone(587.33, 'sawtooth', 0.15, 0.14); setTimeout(() => playTone(880, 'sawtooth', 0.25, 0.16), 120); },
+  unlock: () => {
+    [523.25, 659.25, 783.99, 1046.50, 1318.5].forEach((f, i) => setTimeout(() => playTone(f, 'triangle', 0.3, 0.22), i * 80));
+  },
+  win: () => {
+    [523, 659, 784, 1046, 784, 1046].forEach((f, i) => setTimeout(() => playTone(f, 'triangle', 0.25, 0.22), i * 110));
+  }
+};
+
+// ================= 游戏核心状态与难度配置 =================
+const GAME_DURATION = 30;
+let state = 'IDLE';
+let score = 0;
+let targetScore = 2000;
+let targetReached = false;
+let timeLeft = GAME_DURATION;
+let combo = 0;
+let maxCombo = 0;
+let rainTimer = 0;
+let endCooldown = 0;
+let shakeTimer = 0;
+let shakeIntensity = 0;
+let chestPopTimer = 0;
+let sootFlashAlpha = 0; // 炸到鞭炮黑烟糊屏
+let rushAnnounced = false;
+
+const DIFFICULTIES = {
+  EASY: { target: 1400, speedMult: 1.0,  spawnBase: 0.50, bombRate: 0.22, bombPenalty: -100, swayAmp: 35 },
+  HARD: { target: 2000, speedMult: 1.38, spawnBase: 0.38, bombRate: 0.33, bombPenalty: -150, swayAmp: 95 },
+  HELL: { target: 2600, speedMult: 1.68, spawnBase: 0.30, bombRate: 0.41, bombPenalty: -200, swayAmp: 145 }
+};
+let currentDiff = 'HARD';
+
+function setDifficulty(level) {
+  currentDiff = level;
+  const cfg = DIFFICULTIES[level];
+  targetScore = cfg.target;
+  document.getElementById('target-display').textContent = targetScore;
+  ['EASY', 'HARD', 'HELL'].forEach(k => {
+    const btn = document.getElementById('diff-' + k.toLowerCase());
+    btn.className = (k === level) ? 'active-diff' : 'secondary';
+  });
+}
+
+// 0: 标准双手柄/Pro | 1: 单只左手柄 (L) 横握 | 2: 单只右手柄 (R) 横握
+let joyMode = 1;
+const JOY_MODES = ['标准双手柄 / Pro', '单只左手柄 (L) 横握', '单只右手柄 (R) 横握'];
+
+function cycleJoyMode() {
+  joyMode = (joyMode + 1) % JOY_MODES.length;
+  document.getElementById('mode-btn').textContent = JOY_MODES[joyMode];
+}
+
+const player = {
+  x: W / 2, y: H - 115, w: 126, h: 126,
+  speed: 860, vx: 0, stunTimer: 0, dashCooldown: 0, dashTimer: 0, facing: 1, bounceScale: 1
+};
+
+let items = [], particles = [], floatingTexts = [], spawnTimer = 0;
+
+function triggerShake(duration, intensity) {
+  shakeTimer = Math.max(shakeTimer, duration);
+  shakeIntensity = Math.max(shakeIntensity, intensity);
+}
+
+function adjustTarget(delta) {
+  initAudio();
+  targetScore = Math.max(200, targetScore + delta);
+  document.getElementById('target-display').textContent = targetScore;
+  if (state === 'PLAYING' && !targetReached && score >= targetScore) unlockChest();
+}
+
+function unlockChest() {
+  targetReached = true;
+  chestPopTimer = 1.2;
+  sfx.unlock();
+  triggerShake(0.45, 14);
+  spawnPaperConfetti(W / 2 + Math.min(270, W * 0.24), 60, 60);
+  spawnFloatingText(W / 2, H * 0.34, '🏆 GOLDEN CHEST UNLOCKED · PRIZE WON!', '#fde047', 40);
+}
+
+function triggerRain() {
+  initAudio();
+  if (state !== 'PLAYING') startGame();
+  rainTimer = 5.0;
+  sfx.unlock();
+  triggerShake(0.3, 10);
+  spawnFloatingText(W / 2, H * 0.3, '🌧️ LUCKY RED ENVELOPE RAIN!', '#ffd700', 38);
+}
+
+function resetToIdle() {
+  state = 'IDLE'; items = []; particles = []; floatingTexts = []; sootFlashAlpha = 0;
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  initAudio();
+  if (state === 'IDLE') { startGame(); return; }
+  if (state === 'RESULT' && endCooldown <= 0) { startGame(); return; }
+  if (state === 'PLAYING') {
+    items.push({
+      x: e.clientX, baseX: e.clientX, y: Math.max(80, e.clientY - 40),
+      vy: 280, type: 'MEGA_INGOT', score: 300, radius: 48,
+      rot: 0, rotSpeed: 1.5, phase: 0, swayAmp: 0, swayFreq: 0
+    });
+    sfx.ingot();
+    spawnPaperConfetti(e.clientX, e.clientY, 18);
+  }
+});
+
+// ================= 双引擎 Switch 手柄驱动 (WebHID 底层直连 + Gamepad API) =================
+let hidDevice = null;
+let hidMoveX = 0;
+let hidAnyBtn = false;
+let hidDebugStr = '';
+
+async function connectWebHID() {
+  if (!('hid' in navigator)) {
+    alert('当前浏览器不支持 WebHID 直连，请使用最新版 Google Chrome 浏览器。');
+    return;
+  }
+  try {
+    const devices = await navigator.hid.requestDevice({
+      filters: [{ vendorId: 0x057e }] // Nintendo Switch 官方硬件 ID
+    });
+    if (!devices || devices.length === 0) return;
+    const device = devices[0];
+    if (!device.opened) await device.open();
+    hidDevice = device;
+
+    const name = (device.productName || '').toLowerCase();
+    if (name.includes('(l)')) { joyMode = 1; document.getElementById('mode-btn').textContent = JOY_MODES[1]; }
+    else if (name.includes('(r)')) { joyMode = 2; document.getElementById('mode-btn').textContent = JOY_MODES[2]; }
+
+    device.addEventListener('inputreport', handleHIDReport);
+    hidDebugStr = `WebHID已接管: ${device.productName || 'Switch手柄'}`;
+  } catch (err) {
+    console.warn('WebHID 连接取消或失败:', err);
+  }
+}
+
+// 网页刷新后自动重连之前授权过的 Switch 手柄
+if ('hid' in navigator) {
+  navigator.hid.getDevices().then(async (devices) => {
+    const nintendo = devices.find(d => d.vendorId === 0x057e);
+    if (nintendo) {
+      if (!nintendo.opened) await nintendo.open();
+      hidDevice = nintendo;
+      const name = (nintendo.productName || '').toLowerCase();
+      if (name.includes('(l)')) { joyMode = 1; document.getElementById('mode-btn').textContent = JOY_MODES[1]; }
+      else if (name.includes('(r)')) { joyMode = 2; document.getElementById('mode-btn').textContent = JOY_MODES[2]; }
+      nintendo.addEventListener('inputreport', handleHIDReport);
+      hidDebugStr = `WebHID自动重连: ${nintendo.productName || 'Switch手柄'}`;
+    }
+  }).catch(() => {});
+}
+
+function handleHIDReport(event) {
+  const { data, reportId } = event;
+  if (reportId === 0x3F && data.byteLength >= 3) {
+    // 蓝牙默认简易 HID 报告 (0x3F)
+    const b0 = data.getUint8(0);
+    const b1 = data.getUint8(1);
+    const hat = data.getUint8(2);
+
+    hidAnyBtn = (b0 !== 0) || ((b1 & 0xDF) !== 0);
+
+    let sx = 0;
+    if (hat < 8) {
+      const isUp = (hat === 7 || hat === 0 || hat === 1);
+      const isDown = (hat === 3 || hat === 4 || hat === 5);
+      const isLeft = (hat === 5 || hat === 6 || hat === 7);
+      const isRight = (hat === 1 || hat === 2 || hat === 3);
+
+      if (joyMode === 0) { if (isLeft) sx = -1; else if (isRight) sx = 1; }
+      else if (joyMode === 1) { if (isUp) sx = -1; else if (isDown) sx = 1; }
+      else if (joyMode === 2) { if (isDown) sx = -1; else if (isUp) sx = 1; }
+    }
+    hidMoveX = sx;
+    hidDebugStr = `WebHID[0x3F] btn:${b0.toString(16)}/${b1.toString(16)} hat:${hat} -> 移动:${sx}`;
+  } else if (reportId === 0x30 && data.byteLength >= 11) {
+    // 完整传感器 HID 报告 (0x30)
+    const b2 = data.getUint8(2);
+    const b3 = data.getUint8(3);
+    const b4 = data.getUint8(4);
+    hidAnyBtn = (b2 !== 0) || ((b3 & 0x3F) !== 0) || (b4 !== 0);
+
+    const lx = data.getUint8(5) | ((data.getUint8(6) & 0x0F) << 8);
+    const ly = (data.getUint8(6) >> 4) | (data.getUint8(7) << 4);
+    const rx = data.getUint8(8) | ((data.getUint8(9) & 0x0F) << 8);
+    const ry = (data.getUint8(9) >> 4) | (data.getUint8(10) << 4);
+
+    // 判断活跃摇杆
+    const useLeft = Math.abs(lx - 2048) + Math.abs(ly - 2048) > Math.abs(rx - 2048) + Math.abs(ry - 2048);
+    const rawX = ((useLeft ? lx : rx) - 2048) / 1150;
+    const rawY = ((useLeft ? ly : ry) - 2048) / 1150; // Joy-Con 向上为正
+
+    let sx = 0;
+    if (joyMode === 0) sx = Math.abs(rawX) > 0.2 ? rawX : 0;
+    else if (joyMode === 1) sx = Math.abs(rawY) > 0.2 ? -rawY : 0; // L横握：上=左(-1), 下=右(+1)
+    else if (joyMode === 2) sx = Math.abs(rawY) > 0.2 ? rawY : 0;  // R横握：下=左(-1), 上=右(+1)
+
+    hidMoveX = Math.max(-1, Math.min(1, sx));
+    hidDebugStr = `WebHID[0x30] rawX:${rawX.toFixed(1)} rawY:${rawY.toFixed(1)} -> 移动:${hidMoveX.toFixed(1)}`;
+  }
+}
+
+const keys = {};
+window.addEventListener('keydown', (e) => {
+  initAudio();
+  if (e.code === 'KeyH') { toggleHostPanel(); return; }
+  keys[e.code] = true;
+  if ((state === 'IDLE' || (state === 'RESULT' && endCooldown <= 0)) && (e.code === 'Space' || e.code === 'Enter')) startGame();
+  if (state === 'PLAYING' && e.code === 'Space') triggerDash();
+});
+window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+window.addEventListener('gamepadconnected', (e) => {
+  const id = e.gamepad.id.toLowerCase();
+  if (id.includes('(l)')) { joyMode = 1; document.getElementById('mode-btn').textContent = JOY_MODES[1]; }
+  else if (id.includes('(r)')) { joyMode = 2; document.getElementById('mode-btn').textContent = JOY_MODES[2]; }
+});
+
+let prevAnyButton = false;
+
+function readInput() {
+  let moveX = 0;
+  let anyBtn = false;
+
+  if (keys['ArrowLeft'] || keys['KeyA']) moveX -= 1;
+  if (keys['ArrowRight'] || keys['KeyD']) moveX += 1;
+
+  const badge = document.getElementById('pad-status');
+  const diag = document.getElementById('diag-box');
+
+  // 1. 优先读取 WebHID 直连通道
+  if (hidDevice && hidDevice.opened) {
+    badge.textContent = `已直连 (${(hidDevice.productName || 'Joy-Con').slice(0, 14)})`;
+    badge.className = 'host-badge connected';
+    if (hidMoveX !== 0) moveX = hidMoveX;
+    if (hidAnyBtn) anyBtn = true;
+    diag.textContent = hidDebugStr || 'WebHID 已就绪，请推摇杆或按键';
+  } else {
+    // 2. 回退读取标准 Gamepad API
+    const pads = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(p => p && p.connected) : [];
+    if (pads.length > 0) {
+      let activePad = pads[0];
+      for (const p of pads) { if (p.buttons.some(b => b.pressed)) { activePad = p; break; } }
+
+      badge.textContent = `已连接 (${pads.length}个)`;
+      badge.className = 'host-badge connected';
+
+      const pressedIdx = [];
+      activePad.buttons.forEach((b, idx) => { if (b.pressed) pressedIdx.push(idx); });
+      if (pressedIdx.length > 0) anyBtn = true;
+
+      const a0 = activePad.axes[0] ?? 0;
+      const a1 = activePad.axes[1] ?? 0;
+      const a9 = activePad.axes[9];
+
+      let stickX = 0;
+      if (joyMode === 0) {
+        stickX = Math.abs(a0) > 0.18 ? a0 : (Math.abs(activePad.axes[2] || 0) > 0.18 ? activePad.axes[2] : 0);
+        if (activePad.buttons[14]?.pressed) stickX = -1;
+        if (activePad.buttons[15]?.pressed) stickX = 1;
+      } else if (joyMode === 1) {
+        if (Math.abs(a1) > 0.18) stickX = a1;
+        else if (Math.abs(a0) > 0.18) stickX = -a0;
+      } else if (joyMode === 2) {
+        if (Math.abs(a1) > 0.18) stickX = -a1;
+        else if (Math.abs(a0) > 0.18) stickX = a0;
       }
-    };
 
-    // ==================== 3. GAME STATE & CORE LOGIC ====================
-    let allDecks = {};
-    let currentDeckKey = 'hsk12';
-    let wordQueue = [];
-    let currentWord = null;
-    let timerInterval = null;
-    let peekTimer = null;
-    let generatedDraftWords = [];
-
-    let timeLeft = 90;
-    let isPaused = true;
-    let showSummary = false;
-    let activeTeamIndex = 0;
-    let teams = [
-      { name: 'Red Team', score: 0 },
-      { name: 'Blue Team', score: 0 }
-    ];
-    let history = [];
-
-    window.onload = () => {
-      loadDecks();
-      refillWordQueue();
-      prepareNextWord();
-      renderScoreboard();
-      updateTimerDisplay();
-    };
-
-    function loadDecks() {
-      const saved = localStorage.getItem('ebci_pictionary_decks_single');
-      allDecks = saved ? { ...DEFAULT_DECKS, ...JSON.parse(saved) } : { ...DEFAULT_DECKS };
-      const select = document.getElementById('deck-select');
-      select.innerHTML = '';
-      Object.keys(allDecks).forEach(key => {
-        const opt = document.createElement('option');
-        opt.value = key;
-        opt.textContent = allDecks[key].name;
-        select.appendChild(opt);
-      });
-    }
-
-    function changeDeck() {
-      currentDeckKey = document.getElementById('deck-select').value;
-      refillWordQueue();
-      prepareNextWord();
-    }
-
-    function refillWordQueue() {
-      const list = [...allDecks[currentDeckKey].words];
-      for (let i = list.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [list[i], list[j]] = [list[j], list[i]];
-      }
-      wordQueue = list;
-    }
-
-    function setStageView(viewName) {
-      ['stage-shield', 'stage-peek-word', 'stage-guessing', 'stage-reveal'].forEach(id => {
-        document.getElementById(id).classList.add('hidden');
-      });
-      document.getElementById(viewName).classList.remove('hidden');
-    }
-
-    // Step 1: Prepare next word behind closed-eyes shield
-    function prepareNextWord() {
-      clearInterval(peekTimer);
-      pauseTimerSilently();
-      if (wordQueue.length === 0) refillWordQueue();
-      currentWord = wordQueue.pop();
-      document.getElementById('remaining-count').textContent = wordQueue.length;
-      setStageView('stage-shield');
-    }
-
-    // Step 2: Artist clicks to peek for 6 seconds (Shows Hanzi + Pinyin + Prominent English Meaning)
-    function revealWordToArtist() {
-      AudioEngine.init();
-      document.getElementById('peek-hanzi').textContent = currentWord.hanzi;
-      document.getElementById('peek-pinyin').textContent = currentWord.pinyin;
-      document.getElementById('peek-meaning').textContent = currentWord.meaning || '(No English translation)';
-      setStageView('stage-peek-word');
-
-      const totalMs = 6000;
-      let msLeft = totalMs;
-      const bar = document.getElementById('peek-progress-bar');
-      const countLabel = document.getElementById('peek-countdown');
-      bar.style.width = '100%';
-      countLabel.textContent = '6';
-
-      clearInterval(peekTimer);
-      peekTimer = setInterval(() => {
-        msLeft -= 100;
-        bar.style.width = `${Math.max(0, (msLeft / totalMs) * 100)}%`;
-        countLabel.textContent = Math.ceil(msLeft / 1000);
-        if (msLeft <= 0) {
-          clearInterval(peekTimer);
-          hideWordAndStartDrawing();
-        }
-      }, 100);
-    }
-
-    function rePeekWord() {
-      pauseTimerSilently();
-      setStageView('stage-shield');
-    }
-
-    // Step 3: Hide word, show ? boxes, and resume countdown
-    function hideWordAndStartDrawing() {
-      clearInterval(peekTimer);
-      AudioEngine.playChime();
-      renderCharBoxes(currentWord.hanzi.length);
-      setStageView('stage-guessing');
-      if (timeLeft > 0) {
-        resumeTimer();
-      }
-    }
-
-    function renderCharBoxes(count) {
-      const container = document.getElementById('char-boxes');
-      container.innerHTML = '';
-      for (let i = 0; i < count; i++) {
-        const box = document.createElement('div');
-        box.className = 'w-28 h-28 md:w-40 md:h-40 rounded-3xl bg-slate-900 border-4 border-indigo-500/70 shadow-2xl flex items-center justify-center text-6xl font-black text-indigo-400/60 animate-pop';
-        box.textContent = '?';
-        container.appendChild(box);
-      }
-      const wordLabel = count === 1 ? 'Character' : 'Characters';
-      document.getElementById('char-count-label').innerHTML =
-        `<span class="text-amber-400 text-3xl font-black mr-1.5">${count}</span> ${wordLabel}`;
-    }
-
-    // Correct Guess
-    function handleCorrect() {
-      if (!currentWord) return;
-      pauseTimerSilently();
-      AudioEngine.playCorrect();
-      if (typeof confetti === 'function') {
-        confetti({ particleCount: 90, spread: 75, origin: { y: 0.6 } });
+      if (stickX === 0 && typeof a9 === 'number' && a9 >= -1.05 && a9 <= 1.05) {
+        const isUp = (a9 <= -0.65 || a9 >= 0.95);
+        const isDown = (a9 >= -0.2 && a9 <= 0.5);
+        const isLeft = (a9 >= 0.35 && a9 <= 1.05);
+        const isRight = (a9 >= -0.75 && a9 <= -0.05);
+        if (joyMode === 0) { if (isLeft) stickX = -1; else if (isRight) stickX = 1; }
+        else if (joyMode === 1) { if (isUp) stickX = -1; else if (isDown) stickX = 1; }
+        else if (joyMode === 2) { if (isDown) stickX = -1; else if (isUp) stickX = 1; }
       }
 
-      teams[activeTeamIndex].score += 1;
-      history.push({ ...currentWord, status: 'correct' });
-      document.getElementById('history-count').textContent = history.length;
-      renderScoreboard();
+      if (stickX !== 0) moveX = stickX;
+      diag.textContent = `Gamepad:${activePad.id.slice(0, 14)} | 键:[${pressedIdx.join(',')}] | a0:${a0.toFixed(1)} a1:${a1.toFixed(1)}`;
+    } else {
+      badge.textContent = '未检测到手柄';
+      badge.className = 'host-badge disconnected';
+      diag.textContent = '提示: 若Mac蓝牙已连但此处显示未检测，请点上方绿色「强制直连 Switch 手柄」按钮';
+    }
+  }
 
-      document.getElementById('reveal-hanzi').textContent = currentWord.hanzi;
-      document.getElementById('reveal-pinyin').textContent = currentWord.pinyin;
-      document.getElementById('reveal-meaning').textContent = currentWord.meaning || '';
-      setStageView('stage-reveal');
+  if (anyBtn && !prevAnyButton) {
+    initAudio();
+    if (state === 'IDLE') startGame();
+    else if (state === 'RESULT' && endCooldown <= 0) startGame();
+    else if (state === 'PLAYING') triggerDash();
+  }
+  prevAnyButton = anyBtn;
 
-      setTimeout(() => {
-        prepareNextWord();
-      }, 2200);
+  return Math.max(-1, Math.min(1, moveX));
+}
+
+function triggerDash() {
+  if (player.dashCooldown <= 0 && player.stunTimer <= 0) {
+    player.dashTimer = 0.16;
+    player.dashCooldown = 0.6;
+    player.bounceScale = 1.25;
+    sfx.dash();
+    spawnPaperConfetti(player.x, player.y + 30, 12);
+  }
+}
+
+function startGame() {
+  state = 'PLAYING';
+  score = 0; targetReached = false; timeLeft = GAME_DURATION;
+  combo = 0; maxCombo = 0; rainTimer = 0; sootFlashAlpha = 0; rushAnnounced = false;
+  items = []; particles = []; floatingTexts = [];
+  player.x = W / 2; player.stunTimer = 0; player.dashTimer = 0; player.bounceScale = 1;
+  sfx.coin();
+}
+
+function finishGame() {
+  state = 'RESULT';
+  endCooldown = 1.5;
+  sootFlashAlpha = 0;
+  if (score >= targetScore) {
+    sfx.win();
+    triggerShake(0.5, 12);
+    for (let i = 0; i < 6; i++) {
+      setTimeout(() => spawnPaperConfetti(W * (0.2 + Math.random() * 0.6), H * (0.2 + Math.random() * 0.4), 35), i * 240);
+    }
+  } else {
+    sfx.bomb();
+  }
+}
+
+// ================= 掉落物与高难度轨迹 =================
+function spawnItem() {
+  const cfg = DIFFICULTIES[currentDiff];
+  const margin = 110;
+  const baseX = margin + Math.random() * (W - margin * 2);
+  const progress = 1 - timeLeft / GAME_DURATION;
+  const isRush = timeLeft <= 10; // 最后10秒暴走
+  const speedScale = cfg.speedMult * (1 + progress * 0.32) * (isRush ? 1.22 : 1.0);
+  const rotSpeed = (Math.random() - 0.5) * 4.2;
+
+  if (rainTimer > 0) {
+    const isIngot = Math.random() < 0.35;
+    items.push({
+      x: baseX, baseX, y: -50, vy: (380 + Math.random() * 140) * cfg.speedMult,
+      type: isIngot ? 'INGOT' : 'RED_PACKET', score: isIngot ? 150 : 50,
+      radius: isIngot ? 36 : 32, rot: 0, rotSpeed, phase: 0, swayAmp: 0, swayFreq: 0
+    });
+    return;
+  }
+
+  const r = Math.random();
+  const bombProb = cfg.bombRate + (isRush ? 0.08 : 0);
+  const phase = Math.random() * Math.PI * 2;
+  const swayFreq = 2.2 + Math.random() * 2.0;
+
+  if (r < bombProb) {
+    items.push({
+      x: baseX, baseX, y: -50, vy: (310 + Math.random() * 110) * speedScale,
+      type: 'BOMB', score: cfg.bombPenalty, radius: 34, rot: 0, rotSpeed,
+      phase, swayAmp: cfg.swayAmp * 0.85, swayFreq
+    });
+  } else if (r < bombProb + 0.18) {
+    // 金元宝带较大幅度左右飘移，考验走位与冲刺
+    items.push({
+      x: baseX, baseX, y: -50, vy: (370 + Math.random() * 110) * speedScale,
+      type: 'INGOT', score: 150, radius: 36, rot: 0, rotSpeed,
+      phase, swayAmp: cfg.swayAmp * 1.15, swayFreq: swayFreq * 1.1
+    });
+  } else if (r < bombProb + 0.44) {
+    items.push({
+      x: baseX, baseX, y: -50, vy: (300 + Math.random() * 90) * speedScale,
+      type: 'DUMPLING', score: 80, radius: 32, rot: 0, rotSpeed,
+      phase, swayAmp: cfg.swayAmp * 0.5, swayFreq
+    });
+  } else {
+    items.push({
+      x: baseX, baseX, y: -50, vy: (270 + Math.random() * 85) * speedScale,
+      type: 'RED_PACKET', score: 50, radius: 32, rot: 0, rotSpeed,
+      phase, swayAmp: cfg.swayAmp * 0.35, swayFreq
+    });
+  }
+}
+
+function spawnPaperConfetti(x, y, count, isSmoke = false) {
+  const palette = isSmoke ? ['#111827', '#374151', '#6b7280', '#ef4444'] : ['#ffd700', '#ef4444', '#ffffff', '#fbbf24', '#f87171'];
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = isSmoke ? (110 + Math.random() * 250) : (140 + Math.random() * 380);
+    particles.push({
+      x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - (isSmoke ? 40 : 140),
+      life: 0.65 + Math.random() * 0.45, maxLife: 1.1,
+      color: palette[Math.floor(Math.random() * palette.length)],
+      size: isSmoke ? (12 + Math.random() * 16) : (6 + Math.random() * 7),
+      shape: isSmoke ? 'circle' : (Math.random() < 0.45 ? 'star' : 'ribbon'),
+      rot: Math.random() * Math.PI * 2, vRot: (Math.random() - 0.5) * 14
+    });
+  }
+}
+
+function spawnFloatingText(x, y, text, color, size = 28) {
+  floatingTexts.push({ x, y, text, color, size, life: 1.1, scale: 1.38 });
+}
+
+function update(dt) {
+  const moveX = readInput();
+
+  if (shakeTimer > 0) shakeTimer -= dt;
+  if (chestPopTimer > 0) chestPopTimer -= dt;
+  if (sootFlashAlpha > 0) sootFlashAlpha = Math.max(0, sootFlashAlpha - dt * 1.3);
+  player.bounceScale += (1 - player.bounceScale) * Math.min(1, dt * 14);
+
+  particles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += (p.shape === 'circle' ? 120 : 480) * dt; p.rot += p.vRot * dt; p.life -= dt; });
+  particles = particles.filter(p => p.life > 0);
+
+  floatingTexts.forEach(f => { f.y -= 65 * dt; f.scale += (1 - f.scale) * Math.min(1, dt * 12); f.life -= dt; });
+  floatingTexts = floatingTexts.filter(f => f.life > 0);
+
+  if (state === 'RESULT') { if (endCooldown > 0) endCooldown -= dt; return; }
+  if (state !== 'PLAYING') return;
+
+  timeLeft -= dt;
+  if (timeLeft <= 0) { timeLeft = 0; finishGame(); return; }
+
+  // 最后10秒暴走提示
+  if (timeLeft <= 10 && !rushAnnounced) {
+    rushAnnounced = true;
+    sfx.rush();
+    triggerShake(0.35, 10);
+    spawnFloatingText(W / 2, H * 0.28, '⚡ FINAL 10s RUSH! SPEED UP! ⚡', '#fde047', 38);
+  }
+
+  if (rainTimer > 0) rainTimer -= dt;
+  if (player.stunTimer > 0) player.stunTimer -= dt;
+  if (player.dashCooldown > 0) player.dashCooldown -= dt;
+  if (player.dashTimer > 0) player.dashTimer -= dt;
+
+  if (player.stunTimer <= 0) {
+    const mult = player.dashTimer > 0 ? 2.45 : 1.0;
+    player.vx = moveX * player.speed * mult;
+    if (Math.abs(moveX) > 0.1) player.facing = moveX > 0 ? 1 : -1;
+    player.x += player.vx * dt;
+    player.x = Math.max(75, Math.min(W - 75, player.x));
+  }
+
+  const cfg = DIFFICULTIES[currentDiff];
+  const isRush = timeLeft <= 10;
+  spawnTimer -= dt;
+  const interval = rainTimer > 0 ? 0.14 : Math.max(0.18, cfg.spawnBase * (isRush ? 0.72 : 1.0));
+  if (spawnTimer <= 0) { spawnItem(); spawnTimer = interval; }
+
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    it.y += it.vy * dt;
+    it.rot += it.rotSpeed * dt;
+    if (it.swayAmp > 0) {
+      it.phase += it.swayFreq * dt;
+      it.x = Math.max(60, Math.min(W - 60, it.baseX + Math.sin(it.phase) * it.swayAmp));
     }
 
-    // Skip Word
-    function handleSkip() {
-      if (!currentWord) return;
-      AudioEngine.playSkip();
-      history.push({ ...currentWord, status: 'skipped' });
-      document.getElementById('history-count').textContent = history.length;
-      prepareNextWord();
-    }
+    if (Math.abs(it.x - player.x) < player.w * 0.44 + it.radius * 0.68 && Math.abs(it.y - player.y) < player.h * 0.42 + it.radius * 0.68) {
+      if (it.type === 'BOMB') {
+        score = Math.max(0, score + it.score);
+        combo = 0; player.stunTimer = 1.05; player.bounceScale = 0.72;
+        sootFlashAlpha = 0.45; // 黑烟糊屏遮挡视线增加紧张感
+        sfx.bomb(); triggerShake(0.45, 22);
+        spawnPaperConfetti(it.x, it.y, 32, true);
+        spawnFloatingText(player.x, player.y - 75, `💥 STUNNED! ${it.score}`, '#ef4444', 34);
+      } else {
+        combo++;
+        if (combo > maxCombo) maxCombo = combo;
+        const bonusMult = combo >= 12 ? 2.0 : (combo >= 5 ? 1.5 : 1.0);
+        const gained = Math.round(it.score * bonusMult);
+        score += gained;
+        player.bounceScale = it.type === 'MEGA_INGOT' ? 1.32 : 1.18;
 
-    // ==================== 4. TIMER & INDEPENDENT RESET CONTROLS ====================
-    function resumeTimer() {
-      isPaused = false;
-      document.getElementById('pause-overlay').classList.add('hidden');
-      clearInterval(timerInterval);
-      timerInterval = setInterval(() => {
-        if (isPaused) return;
-        if (timeLeft > 0) {
-          timeLeft -= 1;
-          updateTimerDisplay();
-          if (timeLeft <= 10 && timeLeft > 0) AudioEngine.playTick();
+        if (it.type === 'INGOT' || it.type === 'MEGA_INGOT') {
+          sfx.ingot();
+          triggerShake(0.18, it.type === 'MEGA_INGOT' ? 12 : 6);
+          spawnPaperConfetti(it.x, it.y, it.type === 'MEGA_INGOT' ? 40 : 22);
         } else {
-          clearInterval(timerInterval);
-          isPaused = true;
-          AudioEngine.playTimeUp();
-          alert("⏰ Time's Up! Switch to the next team or click 'Reset Time'.");
+          sfx.coin();
+          spawnPaperConfetti(it.x, it.y, 12);
         }
-      }, 1000);
-    }
 
-    function pauseTimerSilently() {
-      isPaused = true;
-      clearInterval(timerInterval);
-    }
-
-    function togglePause() {
-      if (isPaused) {
-        resumeTimer();
-      } else {
-        pauseTimerSilently();
-        document.getElementById('pause-overlay').classList.remove('hidden');
+        const comboTag = bonusMult > 1 ? ` 🔥${combo}x COMBO!` : '';
+        spawnFloatingText(player.x, player.y - 70, `+${gained}${comboTag}`, '#fde047', it.type === 'MEGA_INGOT' ? 38 : 28);
+        if (!targetReached && score >= targetScore) unlockChest();
       }
+      items.splice(i, 1);
+      continue;
     }
+    if (it.y > H + 70) items.splice(i, 1);
+  }
+}
 
-    // Reset ONLY the timer without discarding the current word
-    function resetTimeOnly() {
-      AudioEngine.init();
-      AudioEngine.playChime();
-      timeLeft = Math.max(5, parseInt(document.getElementById('duration-input').value, 10) || 90);
-      updateTimerDisplay();
-      // If currently actively guessing, keep running smoothly from full time; otherwise stay ready
-      if (!isPaused && !document.getElementById('stage-guessing').classList.contains('hidden')) {
-        resumeTimer();
-      }
-    }
+// ================= 渲染绘制 =================
+function drawBackground() {
+  if (assets.bg) {
+    const imgRatio = assets.bg.width / assets.bg.height;
+    const winRatio = W / H;
+    let drawW, drawH, offsetX, offsetY;
+    if (winRatio > imgRatio) { drawW = W; drawH = W / imgRatio; offsetX = 0; offsetY = H - drawH; }
+    else { drawH = H; drawW = H * imgRatio; offsetX = (W - drawW) / 2; offsetY = 0; }
+    ctx.drawImage(assets.bg, offsetX, offsetY, drawW, drawH);
+  } else {
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, '#fef3c7'); grad.addColorStop(1, '#dc2626');
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+  }
+}
 
-    function updateTimerDisplay() {
-      const el = document.getElementById('main-timer');
-      const m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
-      const s = (timeLeft % 60).toString().padStart(2, '0');
-      el.textContent = `${m}:${s}`;
-      el.className = (timeLeft <= 10 && timeLeft > 0)
-        ? 'text-4xl font-black font-mono text-rose-500 urgent-timer'
-        : 'text-4xl font-black font-mono text-amber-400';
-    }
+function drawPlayer() {
+  ctx.save();
+  ctx.translate(player.x, player.y);
 
-    // ==================== 5. SCOREBOARD & REVIEW WALL ====================
-    function setTeamCount(count) {
-      const presets = [
-        { name: 'Red Team', score: 0 },
-        { name: 'Blue Team', score: 0 },
-        { name: 'Green Team', score: 0 },
-        { name: 'Yellow Team', score: 0 }
-      ];
-      teams = presets.slice(0, count);
-      activeTeamIndex = 0;
-      renderScoreboard();
-    }
+  const isMoving = Math.abs(player.vx) > 20 && player.stunTimer <= 0;
+  const hopY = isMoving ? -Math.abs(Math.sin(Date.now() / 75)) * 12 : 0;
+  const tilt = isMoving ? Math.sin(Date.now() / 75) * 0.08 : 0;
 
-    function selectActiveTeam(idx) {
-      activeTeamIndex = idx;
-      renderScoreboard();
-    }
+  if (player.stunTimer > 0) {
+    ctx.translate(Math.sin(Date.now() / 22) * 11, 0);
+    ctx.rotate(Math.sin(Date.now() / 40) * 0.28);
+  } else {
+    ctx.translate(0, hopY);
+    ctx.rotate(tilt);
+  }
 
-    function adjustScore(idx, delta) {
-      teams[idx].score = Math.round((teams[idx].score + delta) * 10) / 10;
-      renderScoreboard();
-    }
+  ctx.fillStyle = 'rgba(80, 10, 10, 0.28)';
+  ctx.beginPath(); ctx.ellipse(0, 56 - hopY, 52 * player.bounceScale, 13, 0, 0, Math.PI * 2); ctx.fill();
 
-    function renderScoreboard() {
-      const grid = document.getElementById('scoreboard-grid');
-      grid.className = `grid grid-cols-${teams.length} gap-3`;
-      grid.innerHTML = '';
+  ctx.scale(-player.facing * player.bounceScale, player.bounceScale);
+  if (assets.sheep) ctx.drawImage(assets.sheep, -player.w / 2, -player.h / 2, player.w, player.h);
+  else { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, 40, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
+}
 
-      teams.forEach((team, idx) => {
-        const isActive = idx === activeTeamIndex;
-        const card = document.createElement('div');
-        card.onclick = () => selectActiveTeam(idx);
-        card.className = `rounded-2xl px-4 py-3 border-2 cursor-pointer transition flex items-center justify-between ${
-          isActive
-            ? 'bg-indigo-950/90 border-amber-400 shadow-lg'
-            : 'bg-slate-950 border-slate-800 hover:border-slate-700 opacity-85'
-        }`;
-
-        card.innerHTML = `
-          <div>
-            <div class="flex items-center gap-2">
-              <span class="font-black text-base md:text-lg text-white">${team.name}</span>
-              ${isActive ? '<span class="text-[10px] font-bold bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full">Active</span>' : ''}
-            </div>
-            <div class="flex items-center gap-1 mt-1.5" onclick="event.stopPropagation()">
-              <button onclick="adjustScore(${idx}, -1)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-rose-900/70 text-xs font-bold text-slate-300">-1</button>
-              <button onclick="adjustScore(${idx}, 0.5)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-emerald-900/70 text-xs font-bold text-emerald-300">+0.5</button>
-              <button onclick="adjustScore(${idx}, 1)" class="px-2.5 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white">+1</button>
-            </div>
-          </div>
-          <div class="text-4xl font-black font-mono text-amber-400">${team.score}</div>
-        `;
-        grid.appendChild(card);
-      });
-    }
-
-    function toggleSummaryScreen() {
-      showSummary = !showSummary;
-      const stage = document.getElementById('main-stage');
-      const summary = document.getElementById('summary-view');
-
-      if (showSummary) {
-        pauseTimerSilently();
-        stage.classList.add('hidden');
-        summary.classList.remove('hidden');
-        renderSummaryGrid();
-      } else {
-        summary.classList.add('hidden');
-        stage.classList.remove('hidden');
-      }
-    }
-
-    function renderSummaryGrid() {
-      const grid = document.getElementById('summary-grid');
-      grid.innerHTML = '';
-      if (history.length === 0) {
-        grid.innerHTML = '<p class="text-slate-400 col-span-full text-center py-12">No words played yet.</p>';
-        return;
-      }
-      history.forEach(item => {
-        const ok = item.status === 'correct';
-        const div = document.createElement('div');
-        div.className = `p-4 rounded-2xl border ${ok ? 'bg-emerald-950/50 border-emerald-500/40' : 'bg-slate-950 border-slate-800 opacity-75'}`;
-        div.innerHTML = `
-          <div class="flex items-center justify-between mb-1">
-            <span class="text-xs font-semibold text-indigo-300">${item.pinyin}</span>
-            <span class="text-[11px] font-bold px-2 py-0.5 rounded ${ok ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'}">
-              ${ok ? '✅ Guessed' : '⏭️ Skipped'}
-            </span>
-          </div>
-          <div class="zh-text text-2xl font-black text-white">${item.hanzi}</div>
-          <div class="text-xs text-slate-400 mt-0.5">${item.meaning || ''}</div>
-        `;
-        grid.appendChild(div);
-      });
-    }
-
-    function resetAllGame() {
-      if (!confirm('Reset all scores and session word history?')) return;
-      teams.forEach(t => t.score = 0);
-      history = [];
-      document.getElementById('history-count').textContent = '0';
-      renderScoreboard();
-      renderSummaryGrid();
-      resetTimeOnly();
-      prepareNextWord();
-    }
-
-    // ==================== 6. AUTO PINYIN & ENGLISH MEANING ENGINE ====================
-    function openDeckModal() {
-      document.getElementById('deck-modal').classList.remove('hidden');
-    }
-    function closeDeckModal() {
-      document.getElementById('deck-modal').classList.add('hidden');
-    }
-
-    async function translateZhToEn(hanzi) {
-      try {
-        const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(hanzi)}&langpair=zh-CN|en`);
-        const data = await res.json();
-        if (data && data.responseData && data.responseData.translatedText) {
-          return data.responseData.translatedText.toLowerCase();
-        }
-      } catch (e) {}
-      return '';
-    }
-
-    async function autoGenerateWords() {
-      const raw = document.getElementById('raw-hanzi-input').value.trim();
-      if (!raw) return alert('Please paste at least one Chinese word.');
-
-      const btn = document.getElementById('btn-auto-gen');
-      const statusText = document.getElementById('gen-status-text');
-      btn.disabled = true;
-      btn.textContent = '⏳ Generating...';
-
-      const lines = raw.split(/[\n,，、;；]+/).map(s => s.trim()).filter(s => s.length > 0);
-      generatedDraftWords = [];
-
-      for (let i = 0; i < lines.length; i++) {
-        const hanzi = lines[i];
-        const pinyinText = window.pinyinPro ? window.pinyinPro.pinyin(hanzi, { toneType: 'symbol' }) : '';
-        const meaningText = await translateZhToEn(hanzi);
-        generatedDraftWords.push({ hanzi, pinyin: pinyinText, meaning: meaningText });
-        statusText.textContent = `Generated ${i + 1} / ${lines.length}`;
-        renderGeneratedPreview();
-      }
-
-      btn.disabled = false;
-      btn.textContent = '✨ Auto-Generate Pinyin & Meaning';
-      statusText.textContent = `${generatedDraftWords.length} words ready!`;
-    }
-
-    function renderGeneratedPreview() {
-      const container = document.getElementById('generated-preview-list');
-      container.innerHTML = '';
-      generatedDraftWords.forEach((item, idx) => {
-        const row = document.createElement('div');
-        row.className = 'bg-slate-900 border border-slate-800 rounded-xl p-2 flex items-center gap-2';
-        row.innerHTML = `
-          <span class="zh-text font-black text-base text-white min-w-[4rem]">${item.hanzi}</span>
-          <input type="text" value="${item.pinyin}" onchange="generatedDraftWords[${idx}].pinyin = this.value" class="w-28 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-indigo-300 font-semibold" />
-          <input type="text" value="${item.meaning}" onchange="generatedDraftWords[${idx}].meaning = this.value" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-300" />
-          <button onclick="removeDraftWord(${idx})" class="text-slate-500 hover:text-rose-400 px-1 text-sm">&times;</button>
-        `;
-        container.appendChild(row);
-      });
-    }
-
-    function removeDraftWord(idx) {
-      generatedDraftWords.splice(idx, 1);
-      renderGeneratedPreview();
-    }
-
-    function saveGeneratedDeck() {
-      if (generatedDraftWords.length === 0) return alert('Click "Auto-Generate Pinyin & Meaning" first!');
-      const name = document.getElementById('custom-deck-name').value.trim() || 'Custom Lesson Deck';
-      const customKey = 'custom_' + Date.now();
-      const saved = JSON.parse(localStorage.getItem('ebci_pictionary_decks_single') || '{}');
-      saved[customKey] = { name, words: generatedDraftWords };
-      localStorage.setItem('ebci_pictionary_decks_single', JSON.stringify(saved));
-
-      loadDecks();
-      document.getElementById('deck-select').value = customKey;
-      changeDeck();
-      closeDeckModal();
-    }
-  </script>
-</body>
-</html>
+function drawItem(it) {
+  ctx.save();
+  ctx.translate(it.
